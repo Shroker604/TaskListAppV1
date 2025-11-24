@@ -12,6 +12,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.ui.platform.LocalContext
+import android.app.DatePickerDialog
+import java.util.Calendar
+import java.util.Date
+import java.text.SimpleDateFormat
+import java.util.Locale
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -94,7 +102,8 @@ fun TaskListScreen(viewModel: TaskViewModel = viewModel()) {
                 items(uiState.tasks, key = { it.id }) { task ->
                     TaskItem(
                         task = task,
-                        onCheckedChange = { viewModel.toggleTaskCompletion(task.id) }
+                        onCheckedChange = { viewModel.toggleTaskCompletion(task.id) },
+                        onDateChange = { newDate -> viewModel.updateTaskDate(task.id, newDate) }
                     )
                 }
             }
@@ -103,7 +112,28 @@ fun TaskListScreen(viewModel: TaskViewModel = viewModel()) {
 }
 
 @Composable
-fun TaskItem(task: Task, onCheckedChange: (Boolean) -> Unit) {
+fun TaskItem(
+    task: Task,
+    onCheckedChange: (Boolean) -> Unit,
+    onDateChange: (Long) -> Unit
+) {
+    val context = LocalContext.current
+    val calendar = Calendar.getInstance()
+    calendar.timeInMillis = task.scheduledDate
+
+    val datePickerDialog = DatePickerDialog(
+        context,
+        { _, year, month, dayOfMonth ->
+            calendar.set(year, month, dayOfMonth)
+            onDateChange(calendar.timeInMillis)
+        },
+        calendar.get(Calendar.YEAR),
+        calendar.get(Calendar.MONTH),
+        calendar.get(Calendar.DAY_OF_MONTH)
+    )
+
+    val dateFormat = SimpleDateFormat("MMM dd, yyyy", Locale.getDefault())
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
@@ -119,17 +149,31 @@ fun TaskItem(task: Task, onCheckedChange: (Boolean) -> Unit) {
                 onCheckedChange = onCheckedChange
             )
             Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                text = task.content,
-                style = if (task.isCompleted) {
-                    MaterialTheme.typography.bodyLarge.copy(
-                        textDecoration = androidx.compose.ui.text.style.TextDecoration.LineThrough,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                } else {
-                    MaterialTheme.typography.bodyLarge
-                }
-            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = task.content,
+                    style = if (task.isCompleted) {
+                        MaterialTheme.typography.bodyLarge.copy(
+                            textDecoration = androidx.compose.ui.text.style.TextDecoration.LineThrough,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    } else {
+                        MaterialTheme.typography.bodyLarge
+                    }
+                )
+                Text(
+                    text = dateFormat.format(Date(task.scheduledDate)),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.secondary
+                )
+            }
+            IconButton(onClick = { datePickerDialog.show() }) {
+                Icon(
+                    imageVector = Icons.Default.DateRange,
+                    contentDescription = "Change Date",
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            }
         }
     }
 }

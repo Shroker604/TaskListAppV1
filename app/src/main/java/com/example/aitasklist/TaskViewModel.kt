@@ -1,10 +1,13 @@
 package com.example.aitasklist
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 data class TaskUiState(
@@ -13,53 +16,70 @@ data class TaskUiState(
     val error: String? = null
 )
 
-class TaskViewModel : ViewModel() {
+class TaskViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = GeminiRepository()
+    private val taskDao = (application as TaskApplication).database.taskDao()
     
-    private val _uiState = MutableStateFlow(TaskUiState())
-    val uiState: StateFlow<TaskUiState> = _uiState.asStateFlow()
+    private val _isLoading = MutableStateFlow(false)
+    private val _error = MutableStateFlow<String?>(null)
+
+    val uiState: StateFlow<TaskUiState> = combine(
+        taskDao.getAllTasks(),
+        _isLoading,
+        _error
+    ) { tasks, isLoading, error ->
+        TaskUiState(tasks = tasks, isLoading = isLoading, error = error)
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = TaskUiState(isLoading = true)
+    )
 
     fun generateTasks(input: String) {
         if (input.isBlank()) return
 
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true, error = null)
+            _isLoading.value = true
+            _error.value = null
             try {
                 val taskStrings = repository.parseTasks(input)
                 val newTasks = taskStrings.map { Task(content = it) }
-                // Append new tasks to existing ones
-                _uiState.value = _uiState.value.copy(
-                    tasks = _uiState.value.tasks + newTasks,
-                    isLoading = false
-                )
+                taskDao.insertTasks(newTasks)
             } catch (e: Exception) {
-                _uiState.value = _uiState.value.copy(
-                    isLoading = false,
-                    error = e.message
-                )
+                _error.value = e.message
+            } finally {
+                _isLoading.value = false
             }
         }
     }
     
     fun toggleTaskCompletion(taskId: String) {
-        val updatedTasks = _uiState.value.tasks.map { task ->
-            if (task.id == taskId) {
-                task.copy(isCompleted = !task.isCompleted)
-            } else {
-                task
+        viewModelScope.launch {
+            val task = uiState.value.tasks.find { it.id == taskId }
+            task?.let {
+                taskDao.updateTask(it.copy(isCompleted = !it.isCompleted))
             }
         }
-        _uiState.value = _uiState.value.copy(tasks = updatedTasks)
+    }
+
+    fun updateTaskDate(taskId: String, newDate: Long) {
+        viewModelScope.launch {
+            val task = uiState.value.tasks.find { it.id == taskId }
+            task?.let {
+                taskDao.updateTask(it.copy(scheduledDate = newDate))
+            }
+        }
     }
 
     fun removeCompletedTasks() {
-        val activeTasks = _uiState.value.tasks.filter { !it.isCompleted }
-        _uiState.value = _uiState.value.copy(tasks = activeTasks)
+        viewModelScope.launch {
+            taskDao.deleteCompletedTasks()
+        }
     }
 
-
-    
     fun clearTasks() {
-        _uiState.value = TaskUiState()
+        viewModelScope.launch {
+            taskDao.deleteAllTasks()
+        }
     }
 }
