@@ -8,12 +8,6 @@ class TaskApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
-        database = Room.databaseBuilder(
-            applicationContext,
-            AppDatabase::class.java,
-            "task_database"
-        )
-            .fallbackToDestructiveMigration()
-            .build()
+        database = AppDatabase.getInstance(this)
     }
 }

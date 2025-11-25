@@ -13,11 +13,7 @@ class TaskRemoteViewsFactory(private val context: Context) : RemoteViewsService.
     private lateinit var taskDao: TaskDao
 
     override fun onCreate() {
-        database = Room.databaseBuilder(
-            context.applicationContext,
-            AppDatabase::class.java,
-            "task_database"
-        ).build()
+        database = AppDatabase.getInstance(context)
         taskDao = database.taskDao()
     }
 
@@ -28,9 +24,7 @@ class TaskRemoteViewsFactory(private val context: Context) : RemoteViewsService.
     }
 
     override fun onDestroy() {
-        if (::database.isInitialized) {
-            database.close()
-        }
+        // Database is a singleton, do not close it here
     }
 
     override fun getCount(): Int = tasks.size
