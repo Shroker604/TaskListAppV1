@@ -1,4 +1,6 @@
-package com.example.aitasklist
+package com.example.aitasklist.data.local
+
+import com.example.aitasklist.model.Task
 
 import androidx.room.Dao
 import androidx.room.Delete
@@ -27,4 +29,7 @@ interface TaskDao {
 
     @Query("DELETE FROM tasks")
     suspend fun deleteAllTasks()
+
+    @Delete
+    suspend fun deleteTask(task: Task)
 }

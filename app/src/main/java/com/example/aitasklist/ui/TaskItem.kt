@@ -4,6 +4,11 @@ import android.app.DatePickerDialog
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.ui.res.stringResource
+import com.example.aitasklist.R
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -11,7 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
-import com.example.aitasklist.Task
+import com.example.aitasklist.model.Task
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -21,7 +26,9 @@ import java.util.Locale
 fun TaskItem(
     task: Task,
     onCheckedChange: (Boolean) -> Unit,
-    onDateChange: (Long) -> Unit
+    onDateChange: (Long) -> Unit,
+    onAddToCalendar: () -> Unit,
+    onOpenCalendar: () -> Unit
 ) {
     val context = LocalContext.current
     val calendar = Calendar.getInstance()
@@ -46,7 +53,6 @@ fun TaskItem(
     ) {
         Row(
             modifier = Modifier
-                // .padding(16.dp) // Backup: Original padding
                 .padding(horizontal = 16.dp, vertical = 12.dp)
                 .fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
@@ -77,9 +83,26 @@ fun TaskItem(
             IconButton(onClick = { datePickerDialog.show() }) {
                 Icon(
                     imageVector = Icons.Default.DateRange,
-                    contentDescription = "Change Date",
+                    contentDescription = stringResource(R.string.change_date_desc),
                     tint = MaterialTheme.colorScheme.primary
                 )
+            }
+            if (task.calendarEventId == null) {
+                IconButton(onClick = onAddToCalendar) {
+                    Icon(
+                        imageVector = Icons.Default.Add,
+                        contentDescription = stringResource(R.string.add_to_calendar_desc),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+            } else {
+                IconButton(onClick = onOpenCalendar) {
+                    Icon(
+                        imageVector = Icons.Default.Edit,
+                        contentDescription = stringResource(R.string.view_in_calendar_desc),
+                        tint = MaterialTheme.colorScheme.secondary
+                    )
+                }
             }
         }
     }

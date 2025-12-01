@@ -1,10 +1,11 @@
-package com.example.aitasklist
+package com.example.aitasklist.data.remote
 
 import com.google.ai.client.generativeai.GenerativeModel
 import com.google.ai.client.generativeai.type.content
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
+import com.example.aitasklist.BuildConfig
 
 class GeminiRepository {
     // Use the API Key from BuildConfig
@@ -15,15 +16,21 @@ class GeminiRepository {
         apiKey = apiKey
     )
 
-    suspend fun parseTasks(input: String): List<String> = withContext(Dispatchers.IO) {
+    suspend fun parseTasks(input: String, splitTasks: Boolean): List<String> = withContext(Dispatchers.IO) {
         try {
+            val groupingInstruction = if (splitTasks) {
+                "3. Split the input into individual tasks. Do NOT group related items. For example, 'Buy apples, potatoes and milk' should be THREE tasks: 'Buy apples', 'Buy potatoes', 'Buy milk'."
+            } else {
+                "3. Group related items together into a single task. For example, if the user says 'Buy apples, potatoes and milk', this should be ONE task like 'Buy apples, potatoes, and milk' or 'Grocery shopping: apples, potatoes, milk'."
+            }
+
             val prompt = """
                 You are a helpful assistant. Please take the following user input and split it into a list of distinct tasks.
                 
                 Rules:
                 1. Return ONLY a valid JSON array of strings.
                 2. Do not include markdown formatting like ```json ... ```.
-                3. Group related items together into a single task. For example, if the user says "Buy apples, potatoes and milk", this should be ONE task like "Buy apples, potatoes, and milk" or "Grocery shopping: apples, potatoes, milk".
+                $groupingInstruction
                 4. Keep unrelated tasks separate. For example, "Buy milk and wash the car" should be TWO tasks: "Buy milk" and "Wash the car".
                 
                 Input: "$input"

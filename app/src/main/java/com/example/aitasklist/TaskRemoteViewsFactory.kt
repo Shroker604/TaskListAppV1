@@ -5,6 +5,9 @@ import android.content.Intent
 import android.widget.RemoteViews
 import android.widget.RemoteViewsService
 import androidx.room.Room
+import com.example.aitasklist.model.Task
+import com.example.aitasklist.data.local.AppDatabase
+import com.example.aitasklist.data.local.TaskDao
 
 class TaskRemoteViewsFactory(private val context: Context) : RemoteViewsService.RemoteViewsFactory {
 

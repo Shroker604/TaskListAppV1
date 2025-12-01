@@ -1,3 +1,19 @@
 <resources>
     <string name="app_name">AI Task List</string>
+    <string name="select_default_calendar">Select Default Calendar</string>
+    <string name="close">Close</string>
+    <string name="enter_plans_hint">Enter your plans (e.g. Buy milk and call Mom)</string>
+    <string name="generate_tasks">Generate Tasks</string>
+    <string name="remove_completed">Remove Completed</string>
+    <string name="error_prefix">Error: %1$s</string>
+    <string name="added_to_calendar">Added to calendar (%1$s)</string>
+    <string name="permission_denied">Permission denied</string>
+    <string name="settings_desc">Settings</string>
+    <string name="change_date_desc">Change Date</string>
+    <string name="add_to_calendar_desc">Add to Calendar</string>
+    <string name="view_in_calendar_desc">View in Calendar</string>
+    <string name="event_not_found_resync">App: Event not found. Re-syncing...</string>
+    <string name="could_not_open_calendar">Could not open calendar</string>
+    <string name="unknown_account">Unknown Account</string>
+    <string name="unknown">Unknown</string>
 </resources>

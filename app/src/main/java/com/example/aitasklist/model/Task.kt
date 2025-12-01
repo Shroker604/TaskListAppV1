@@ -1,4 +1,4 @@
-package com.example.aitasklist
+package com.example.aitasklist.model
 
 import androidx.room.Entity
 import androidx.room.PrimaryKey
@@ -10,5 +10,6 @@ data class Task(
     val content: String,
     val isCompleted: Boolean = false,
     val createdAt: Long = System.currentTimeMillis(),
-    val scheduledDate: Long = System.currentTimeMillis()
+    val scheduledDate: Long = System.currentTimeMillis(),
+    val calendarEventId: Long? = null
 )
