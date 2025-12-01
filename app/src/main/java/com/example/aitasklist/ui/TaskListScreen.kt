@@ -23,13 +23,20 @@ import android.provider.CalendarContract
 import android.content.ContentUris
 
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.LightMode
+import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.Icons
 import androidx.compose.ui.res.stringResource
 import com.example.aitasklist.R
 
 @Composable
-fun TaskListScreen(viewModel: TaskViewModel = viewModel()) {
+fun TaskListScreen(
+    viewModel: TaskViewModel = viewModel(),
+    isDarkTheme: Boolean = false,
+    onThemeToggle: () -> Unit = {}
+) {
     val uiState by viewModel.uiState.collectAsState()
     var textInput by remember { mutableStateOf("") }
     var showCalendarDialog by remember { mutableStateOf(false) }
@@ -72,8 +79,37 @@ fun TaskListScreen(viewModel: TaskViewModel = viewModel()) {
                 text = stringResource(R.string.app_name),
                 style = MaterialTheme.typography.headlineMedium
             )
-            IconButton(onClick = { showCalendarDialog = true }) {
-                Icon(Icons.Default.Settings, contentDescription = stringResource(R.string.settings_desc))
+            Row {
+                IconButton(onClick = { showCalendarDialog = true }) {
+                    Icon(Icons.Default.DateRange, contentDescription = "Select Calendar")
+                }
+                
+                Box {
+                    var showMenu by remember { mutableStateOf(false) }
+                    
+                    IconButton(onClick = { showMenu = true }) {
+                        Icon(Icons.Default.Settings, contentDescription = stringResource(R.string.settings_desc))
+                    }
+                    
+                    DropdownMenu(
+                        expanded = showMenu,
+                        onDismissRequest = { showMenu = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text(if (isDarkTheme) "Light Mode" else "Dark Mode") },
+                            onClick = {
+                                onThemeToggle()
+                                showMenu = false
+                            },
+                            leadingIcon = {
+                                Icon(
+                                    if (isDarkTheme) Icons.Default.LightMode else Icons.Default.DarkMode,
+                                    contentDescription = null
+                                )
+                            }
+                        )
+                    }
+                }
             }
         }
 
