@@ -25,3 +25,6 @@ I'm updating TaskListScreen.kt. I'll add the menu logic, switch the icons, and m
 Header refactored. I'll verify the changes by creating a walkthrough and then I'll be done. 
 Yes, absolutely. Git is the version control system. Every time we commit and push, we create a snapshot of your code at that point in time. You can always go back to previous versions if needed. 
 Pushing your latest changes to GitHub now. 
+Push complete. Your code is safely backed up on GitHub. 
+That notification means your editor noticed we changed the build.gradle.kts file. It wants to reload the project to recognize the new dependencies we added. You can usually click a 'Reload' or 'Sync' button nearby, or just ignore it since I'm handling the builds for you. 
+Exactly as I mentioned. It's just an 'Info' message, not an error. It confirms the editor saw our changes to the build file. Since the install command worked, you can ignore it. 

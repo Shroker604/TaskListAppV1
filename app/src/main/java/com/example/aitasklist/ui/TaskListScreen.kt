@@ -80,9 +80,7 @@ fun TaskListScreen(
                 style = MaterialTheme.typography.headlineMedium
             )
             Row {
-                IconButton(onClick = { showCalendarDialog = true }) {
-                    Icon(Icons.Default.DateRange, contentDescription = "Select Calendar")
-                }
+
                 
                 Box {
                     var showMenu by remember { mutableStateOf(false) }
@@ -105,6 +103,19 @@ fun TaskListScreen(
                                 Icon(
                                     if (isDarkTheme) Icons.Default.LightMode else Icons.Default.DarkMode,
                                     contentDescription = null
+                                )
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Calendars") },
+                            onClick = {
+                                showCalendarDialog = true
+                                showMenu = false
+                            },
+                            leadingIcon = {
+                                Icon(
+                                    Icons.Default.DateRange,
+                                    contentDescription = "Select Calendar"
                                 )
                             }
                         )
