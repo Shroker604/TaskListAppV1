@@ -6,8 +6,8 @@ const AI = {
 
     async generateTasks(prompt, userKey) {
         const apiKey = userKey || this.DEFAULT_KEY;
-        // Using 1.5-flash for speed/efficiency (Legacy code said 2.5-flash which likely doesn't exist publicly yet)
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+        // Using 2.5-flash as explicitly requested by user via AI Studio info
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
 
         const systemPrompt = `
         You are a helpful assistant. Please take the following user input and split it into a list of distinct tasks.
