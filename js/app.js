@@ -67,4 +67,65 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    // --- Settings & AI ---
+    const settingsBtn = document.getElementById('settings-btn');
+    const settingsModal = document.getElementById('settings-modal');
+    const closeSettingsBtn = document.getElementById('close-settings-btn');
+    const apiKeyInput = document.getElementById('api-key-input');
+    const aiBtn = document.getElementById('ai-task-btn');
+
+    // Settings Modal
+    settingsBtn.addEventListener('click', () => {
+        apiKeyInput.value = Store.getApiKey();
+        settingsModal.classList.remove('hidden');
+    });
+
+    closeSettingsBtn.addEventListener('click', () => {
+        Store.saveApiKey(apiKeyInput.value.trim());
+        settingsModal.classList.add('hidden');
+    });
+
+    // AI Generation
+    aiBtn.addEventListener('click', async () => {
+        const text = taskInput.value.trim();
+        if (!text) {
+            alert("Please type a description first!");
+            return;
+        }
+
+        const apiKey = Store.getApiKey();
+        if (!apiKey) {
+            alert("Please add your Gemini API Key in Settings first.");
+            closeModal();
+            settingsBtn.click();
+            return;
+        }
+
+        // Loading State
+        const originalIcon = aiBtn.innerHTML;
+        aiBtn.innerHTML = '<div style="width:20px; height:20px; border:2px solid #a78bfa; border-top-color:transparent; border-radius:50%; animation:spin 1s linear infinite;"></div>';
+
+        try {
+            const result = await AI.generateTask(text, apiKey);
+            if (result && result.text) {
+                // Update input with clean task
+                taskInput.value = result.text;
+                // Highlight success
+                taskInput.style.borderColor = '#a78bfa';
+                setTimeout(() => taskInput.style.borderColor = '', 1000);
+            }
+        } catch (error) {
+            alert("AI Error: " + error.message);
+        } finally {
+            aiBtn.innerHTML = originalIcon;
+        }
+    });
+
 });
+
+// Add spin animation
+const style = document.createElement('style');
+style.innerHTML = `
+@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+`;
+document.head.appendChild(style);

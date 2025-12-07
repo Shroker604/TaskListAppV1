@@ -29,5 +29,13 @@ const Store = {
         tasks = tasks.filter(t => t.id !== id);
         localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
         return tasks;
+    },
+
+    getApiKey() {
+        return localStorage.getItem('gemini_api_key') || '';
+    },
+
+    saveApiKey(key) {
+        localStorage.setItem('gemini_api_key', key);
     }
 };
