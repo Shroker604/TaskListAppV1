@@ -1,5 +1,5 @@
 // Service Worker - Enables PWA "Install" and Offline support
-const CACHE_NAME = 'tasklist-v2-install-fix'; // Bumped version
+const CACHE_NAME = 'tasklist-v3-manifest-fix'; // Bumped version
 const ASSETS = [
     './',
     './index.html',

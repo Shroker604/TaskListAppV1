@@ -1,8 +1,7 @@
 {
     "name": "AI TaskList",
     "short_name": "TaskList",
-    "id": "/TaskListAppV1/",
-    "start_url": "index.html",
+    "start_url": "./",
     "scope": "./",
     "display": "standalone",
     "orientation": "portrait",
