@@ -1,8 +1,11 @@
 {
     "name": "AI TaskList",
     "short_name": "TaskList",
-    "start_url": "./index.html",
+    "id": "/TaskListAppV1/",
+    "start_url": "index.html",
+    "scope": "./",
     "display": "standalone",
+    "orientation": "portrait",
     "background_color": "#09090b",
     "theme_color": "#8b5cf6",
     "icons": [
