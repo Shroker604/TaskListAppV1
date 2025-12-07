@@ -37,5 +37,13 @@ const Store = {
 
     saveApiKey(key) {
         localStorage.setItem('gemini_api_key', key);
+    },
+
+    getTheme() {
+        return localStorage.getItem('theme') || 'dark';
+    },
+
+    saveTheme(theme) {
+        localStorage.setItem('theme', theme);
     }
 };

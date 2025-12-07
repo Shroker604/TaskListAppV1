@@ -95,22 +95,46 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // --- Settings & AI ---
+    // --- Settings & Theme ---
     const settingsBtn = document.getElementById('settings-btn');
     const settingsModal = document.getElementById('settings-modal');
     const closeSettingsBtn = document.getElementById('close-settings-btn');
-    const apiKeyInput = document.getElementById('api-key-input');
-    const aiBtn = document.getElementById('ai-task-btn');
+    const themeBtn = document.getElementById('theme-toggle-btn');
+    const themeLabel = document.getElementById('theme-label');
+    const themeIcon = document.getElementById('theme-icon');
+
+    // Theme State
+    let currentTheme = Store.getTheme();
+    const applyTheme = (theme) => {
+        if (theme === 'light') {
+            document.body.classList.add('light-mode');
+            document.body.classList.remove('dark-mode');
+            themeLabel.innerText = 'Light Mode';
+            themeIcon.innerText = '☀️';
+        } else {
+            document.body.classList.add('dark-mode');
+            document.body.classList.remove('light-mode');
+            themeLabel.innerText = 'Dark Mode';
+            themeIcon.innerText = '🌙';
+        }
+    };
+    // Apply on load
+    applyTheme(currentTheme);
 
     // Settings Modal
     settingsBtn.addEventListener('click', () => {
-        apiKeyInput.value = Store.getApiKey();
         settingsModal.classList.remove('hidden');
     });
 
     closeSettingsBtn.addEventListener('click', () => {
-        Store.saveApiKey(apiKeyInput.value.trim());
         settingsModal.classList.add('hidden');
+    });
+
+    // Toggle Theme
+    themeBtn.addEventListener('click', () => {
+        currentTheme = currentTheme === 'dark' ? 'light' : 'dark';
+        applyTheme(currentTheme);
+        Store.saveTheme(currentTheme);
     });
 
     // Hidden AI button (Functionality moved to Save)

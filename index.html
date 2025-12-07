@@ -103,13 +103,13 @@
         <div class="modal-content glass-panel">
             <h2>Settings</h2>
             <div class="setting-group" style="margin-top: 20px;">
-                <label for="api-key-input"
-                    style="display:block; color:var(--text-muted); margin-bottom:8px; font-size:0.9rem;">Gemini API
-                    Key</label>
-                <input type="password" id="api-key-input" placeholder="Paste your key here..."
-                    style="width:100%; padding:12px; border-radius:8px; background:#27272a; border:1px solid var(--border-color); color:white;">
-                <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 8px;">Key is stored locally on your
-                    device.</p>
+                <label
+                    style="display:block; color:var(--text-muted); margin-bottom:12px; font-size:1rem;">Appearance</label>
+                <button id="theme-toggle-btn" class="theme-toggle"
+                    style="width:100%; padding:16px; border-radius:12px; background:var(--card-bg); border:1px solid var(--border-color); color:var(--text-main); display:flex; justify-content:space-between; align-items:center;">
+                    <span id="theme-label">Dark Mode</span>
+                    <span id="theme-icon">🌙</span>
+                </button>
             </div>
             <div class="modal-actions" style="margin-top: 24px;">
                 <button id="close-settings-btn" class="btn-primary">Done</button>
