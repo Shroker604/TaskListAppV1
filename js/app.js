@@ -34,21 +34,49 @@ document.addEventListener('DOMContentLoaded', () => {
         if (e.target === modal) closeModal();
     });
 
-    // Save Task
-    saveBtn.addEventListener('click', () => {
+    // Save Task (AI Default)
+    saveBtn.addEventListener('click', async () => {
         const text = taskInput.value.trim();
         if (!text) return;
 
-        const newTask = {
-            id: Date.now().toString(),
-            text: text,
-            completed: false,
-            createdAt: new Date().toISOString()
-        };
+        // Show Loading state on Save button
+        const originalBtnText = saveBtn.innerText;
+        saveBtn.innerText = 'Processing...';
+        saveBtn.disabled = true;
 
-        tasks = Store.saveTask(newTask);
-        Render.tasks(tasks, taskListEl);
-        closeModal();
+        try {
+            // Always try AI processing first
+            const apiKey = Store.getApiKey(); // Will fallback to default in AI.js if empty
+            const taskList = await AI.generateTasks(text, apiKey);
+
+            taskList.forEach(taskText => {
+                const newTask = {
+                    id: Date.now().toString() + Math.random().toString().slice(2, 5), // Unique ID for loop
+                    text: taskText,
+                    completed: false,
+                    createdAt: new Date().toISOString()
+                };
+                tasks = Store.saveTask(newTask);
+            });
+
+            Render.tasks(tasks, taskListEl);
+            closeModal();
+        } catch (err) {
+            // Fallback to simple add if AI fails hard
+            alert("AI Error, adding normally: " + err.message);
+            const newTask = {
+                id: Date.now().toString(),
+                text: text,
+                completed: false,
+                createdAt: new Date().toISOString()
+            };
+            tasks = Store.saveTask(newTask);
+            Render.tasks(tasks, taskListEl);
+            closeModal();
+        } finally {
+            saveBtn.innerText = originalBtnText;
+            saveBtn.disabled = false;
+        }
     });
 
     // Enter key to save
@@ -85,47 +113,7 @@ document.addEventListener('DOMContentLoaded', () => {
         settingsModal.classList.add('hidden');
     });
 
-    // AI Generation
-    aiBtn.addEventListener('click', async () => {
-        const text = taskInput.value.trim();
-        if (!text) {
-            alert("Please type a description first!");
-            return;
-        }
-
-        const apiKey = Store.getApiKey();
-        if (!apiKey) {
-            alert("Please add your Gemini API Key in Settings first.");
-            closeModal();
-            settingsBtn.click();
-            return;
-        }
-
-        // Loading State
-        const originalIcon = aiBtn.innerHTML;
-        aiBtn.innerHTML = '<div style="width:20px; height:20px; border:2px solid #a78bfa; border-top-color:transparent; border-radius:50%; animation:spin 1s linear infinite;"></div>';
-
-        try {
-            const result = await AI.generateTask(text, apiKey);
-            if (result && result.text) {
-                // Update input with clean task
-                taskInput.value = result.text;
-                // Highlight success
-                taskInput.style.borderColor = '#a78bfa';
-                setTimeout(() => taskInput.style.borderColor = '', 1000);
-            }
-        } catch (error) {
-            alert("AI Error: " + error.message);
-        } finally {
-            aiBtn.innerHTML = originalIcon;
-        }
-    });
+    // Hidden AI button (Functionality moved to Save)
+    if (aiBtn) aiBtn.style.display = 'none';
 
 });
-
-// Add spin animation
-const style = document.createElement('style');
-style.innerHTML = `
-@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-`;
-document.head.appendChild(style);

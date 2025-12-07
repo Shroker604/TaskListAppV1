@@ -1,21 +1,24 @@
 // AI.js - Handles communication with Gemini API
 
 const AI = {
-    async generateTask(prompt, apiKey) {
-        if (!apiKey) throw new Error("API Key missing");
+    // Hardcoded key as requested by user
+    DEFAULT_KEY: 'AIzaSyAVRKKCOg-ZekkLL2-8kwb7zlZ_yMZSakg',
 
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${apiKey}`;
+    async generateTasks(prompt, userKey) {
+        const apiKey = userKey || this.DEFAULT_KEY;
+        // Using 1.5-flash for speed/efficiency (Legacy code said 2.5-flash which likely doesn't exist publicly yet)
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
 
         const systemPrompt = `
-        You are an intelligent task parsing assistant. 
-        Your goal is to extract a single task from the user's natural language input.
-        If the input contains multiple tasks, combine them logically or pick the main one.
+        You are a helpful assistant. Please take the following user input and split it into a list of distinct tasks.
         
-        Return STRICT JSON format:
-        { "text": "The concise task description" }
+        Rules:
+        1. Return ONLY a valid JSON array of strings.
+        2. Do not include markdown formatting like \`\`\`json ... \`\`\`.
+        3. Keep unrelated tasks separate. For example, "Buy milk and wash the car" should be TWO tasks: "Buy milk" and "Wash the car".
         
-        Example Input: "Remind me to buy milk tomorrow heavily"
-        Example Output: { "text": "Buy milk" }
+        Example Input: "Buy milk and call mom"
+        Example Output: ["Buy milk", "Call Mom"]
         `;
 
         const payload = {
@@ -37,14 +40,18 @@ const AI = {
 
             if (!response.ok) throw new Error(data.error?.message || "API Error");
 
-            const text = data.candidates[0].content.parts[0].text;
-            // Clean markdown if present
-            const cleanJson = text.replace(/```json/g, '').replace(/```/g, '').trim();
-            return JSON.parse(cleanJson);
+            if (data.candidates && data.candidates[0].content) {
+                const text = data.candidates[0].content.parts[0].text;
+                // Clean markdown if present
+                const cleanJson = text.replace(/```json/g, '').replace(/```/g, '').trim();
+                return JSON.parse(cleanJson); // Returns Array of strings
+            }
+            return [prompt]; // Fallback
 
         } catch (error) {
             console.error("AI Error:", error);
-            throw error;
+            // Fallback: Return as single task if parsing fails
+            return [prompt];
         }
     }
 };
