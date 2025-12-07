@@ -81,8 +81,8 @@
 
 /* FAB */
 .fab {
-    position: absolute;
-    bottom: 24px;
+    position: fixed;
+    bottom: 32px;
     right: 24px;
     width: 56px;
     height: 56px;
@@ -94,6 +94,8 @@
     color: white;
     box-shadow: 0 4px 12px rgba(139, 92, 246, 0.4);
     transition: transform 0.2s;
+    z-index: 50;
+    /* Ensure it is on top */
 }
 
 .fab:active {

@@ -1,18 +1,23 @@
 :root {
     /* Color Palette - Premium Dark Mode (Discord/Spotify vibe) */
-    --bg-color: #09090b; /* Deep Zinc */
-    --card-bg: rgba(39, 39, 42, 0.6); /* Zinc 800 with opacity */
-    --primary: #8b5cf6; /* Violet 500 */
+    --bg-color: #09090b;
+    /* Deep Zinc */
+    --card-bg: rgba(39, 39, 42, 0.6);
+    /* Zinc 800 with opacity */
+    --primary: #8b5cf6;
+    /* Violet 500 */
     --primary-hover: #7c3aed;
-    --text-main: #f4f4f5; /* Zinc 100 */
-    --text-muted: #a1a1aa; /* Zinc 400 */
+    --text-main: #f4f4f5;
+    /* Zinc 100 */
+    --text-muted: #a1a1aa;
+    /* Zinc 400 */
     --border-color: rgba(255, 255, 255, 0.1);
-    
+
     /* Spacing & Layout */
     --padding-base: 16px;
     --radius-lg: 16px;
     --radius-sm: 8px;
-    
+
     /* Glassmorphism */
     --glass-blur: 12px;
 }
@@ -29,7 +34,11 @@ body {
     color: var(--text-main);
     font-family: 'Outfit', sans-serif;
     height: 100vh;
-    overflow: hidden; /* App-like feel, scroll inside main */
+    /* Fallback */
+    height: 100dvh;
+    /* Dynamic viewport height for mobile */
+    overflow: hidden;
+    /* App-like feel, scroll inside main */
     display: flex;
     flex-direction: column;
 }
@@ -39,7 +48,8 @@ body {
     flex-direction: column;
     height: 100%;
     position: relative;
-    max-width: 600px; /* Tablet limit */
+    max-width: 600px;
+    /* Tablet limit */
     margin: 0 auto;
     width: 100%;
     background: linear-gradient(180deg, rgba(139, 92, 246, 0.05) 0%, rgba(9, 9, 11, 0) 40%);
@@ -61,4 +71,6 @@ button {
 }
 
 /* Utilities */
-.hidden { display: none !important; }
+.hidden {
+    display: none !important;
+}
