@@ -1,16 +1,14 @@
 // AI.js - Handles communication with Gemini API
 
 const AI = {
-    // Key is split to prevent casual scraping/searching in source code
-    // This is "Security through Obscurity" - sufficient for casual use but not preventing network sniffing
-    _c: ['AIzaSyAVRKKCOg', '-ZekkLL2-8kwb7', 'zlZ_yMZSakg'],
-
-    getEncodedKey() {
-        return this._c.join('');
-    },
+    // Key removed for security. Key must be passed from Android/User.
 
     async generateTasks(prompt, userKey) {
-        const apiKey = userKey || this.getEncodedKey();
+        if (!userKey) {
+            console.error("No API Key provided to generateTasks");
+            return [prompt];
+        }
+        const apiKey = userKey;
 
         // Using 2.5-flash as explicitly requested by user via AI Studio info
         const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
