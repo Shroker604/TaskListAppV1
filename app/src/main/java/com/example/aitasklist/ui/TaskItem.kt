@@ -1,6 +1,6 @@
 package com.example.aitasklist.ui
 
-import android.app.DatePickerDialog
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DateRange
@@ -32,7 +32,7 @@ import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
-@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun TaskItem(
     task: Task,
@@ -63,16 +63,44 @@ fun TaskItem(
                             taskCalendar.get(Calendar.DAY_OF_YEAR) < currentCalendar.get(Calendar.DAY_OF_YEAR))
             )
 
-    val datePickerDialog = DatePickerDialog(
-        context,
-        { _, year, month, dayOfMonth ->
-            calendar.set(year, month, dayOfMonth)
-            onDateChange(calendar.timeInMillis)
-        },
-        calendar.get(Calendar.YEAR),
-        calendar.get(Calendar.MONTH),
-        calendar.get(Calendar.DAY_OF_MONTH)
-    )
+
+    var showDatePicker by remember { mutableStateOf(false) }
+
+    if (showDatePicker) {
+        val datePickerState = rememberDatePickerState(
+            initialSelectedDateMillis = remember(task.scheduledDate) {
+                val cal = Calendar.getInstance()
+                cal.timeInMillis = task.scheduledDate
+                val utcCal = Calendar.getInstance(java.util.TimeZone.getTimeZone("UTC"))
+                utcCal.clear()
+                utcCal.set(cal.get(Calendar.YEAR), cal.get(Calendar.MONTH), cal.get(Calendar.DAY_OF_MONTH))
+                utcCal.timeInMillis
+            }
+        )
+
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    showDatePicker = false
+                    datePickerState.selectedDateMillis?.let { utcMillis ->
+                        val utcCal = Calendar.getInstance(java.util.TimeZone.getTimeZone("UTC"))
+                        utcCal.timeInMillis = utcMillis
+                        
+                        val localCal = Calendar.getInstance()
+                        localCal.timeInMillis = task.scheduledDate
+                        localCal.set(utcCal.get(Calendar.YEAR), utcCal.get(Calendar.MONTH), utcCal.get(Calendar.DAY_OF_MONTH))
+                        onDateChange(localCal.timeInMillis)
+                    }
+                }) { Text("OK") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDatePicker = false }) { Text("Cancel") }
+            }
+        ) {
+            DatePicker(state = datePickerState)
+        }
+    }
 
     val dateFormat = SimpleDateFormat("MMM dd, yyyy", Locale.getDefault())
     val timeFormat = SimpleDateFormat("h:mm a", Locale.getDefault())
@@ -176,7 +204,7 @@ fun TaskItem(
                         }
                     }
                 }
-                IconButton(onClick = { datePickerDialog.show() }, enabled = !showDragHandle) {
+                IconButton(onClick = { showDatePicker = true }, enabled = !showDragHandle) {
                     Icon(
                         imageVector = Icons.Default.DateRange,
                         contentDescription = stringResource(R.string.change_date_desc),
