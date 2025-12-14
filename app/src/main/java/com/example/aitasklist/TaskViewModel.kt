@@ -15,12 +15,20 @@ import com.example.aitasklist.data.remote.GeminiRepository
 import com.example.aitasklist.data.repository.CalendarRepository
 import com.example.aitasklist.data.repository.CalendarInfo
 
+enum class SortOption {
+    CREATION_DATE, // Default: Newest first
+    DATE_REMINDER,  // Scheduled Date -> Reminder Time
+    CUSTOM         // User defined order
+}
+
 data class TaskUiState(
     val tasks: List<Task> = emptyList(),
     val isLoading: Boolean = false,
     val error: String? = null,
     val calendars: List<CalendarInfo> = emptyList(),
-    val defaultCalendarId: Long? = null
+    val defaultCalendarId: Long? = null,
+    val sortOption: SortOption = SortOption.DATE_REMINDER,
+    val sortAscending: Boolean = false // Default: Descending (Newest First)
 )
 
 class TaskViewModel(application: Application) : AndroidViewModel(application) {
@@ -33,6 +41,8 @@ class TaskViewModel(application: Application) : AndroidViewModel(application) {
     private val _error = MutableStateFlow<String?>(null)
     private val _calendars = MutableStateFlow<List<CalendarInfo>>(emptyList())
     private val _defaultCalendarId = MutableStateFlow<Long?>(null)
+    private val _sortOption = MutableStateFlow(SortOption.DATE_REMINDER)
+    private val _sortAscending = MutableStateFlow(false)
 
     val uiState: StateFlow<TaskUiState> = combine(
         taskDao.getAllTasks(),
@@ -41,12 +51,86 @@ class TaskViewModel(application: Application) : AndroidViewModel(application) {
         _calendars,
         _defaultCalendarId
     ) { tasks, isLoading, error, calendars, defaultId ->
-        TaskUiState(tasks, isLoading, error, calendars, defaultId)
-    }.stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(5000),
-        initialValue = TaskUiState(isLoading = true)
-    )
+        TaskUiState(tasks = tasks, isLoading = isLoading, error = error, calendars = calendars, defaultCalendarId = defaultId)
+    }.combine(_sortOption) { state, sortOption -> state.copy(sortOption = sortOption) }
+    .combine(_sortAscending) { state, sortAscending ->
+        val sortedTasks = when (state.sortOption) {
+            SortOption.CREATION_DATE -> {
+                if (sortAscending) {
+                    state.tasks.sortedBy { it.createdAt }
+                } else {
+                    state.tasks.sortedByDescending { it.createdAt }
+                }
+            }
+            SortOption.DATE_REMINDER -> {
+                val comparator = Comparator<Task> { t1, t2 ->
+                    // 1. Compare Dates (Start of Day)
+                    val date1 = getStartOfDay(t1.scheduledDate)
+                    val date2 = getStartOfDay(t2.scheduledDate)
+                    val dateResult = if (sortAscending) {
+                        date1.compareTo(date2)
+                    } else {
+                        date2.compareTo(date1)
+                    }
+
+                    if (dateResult != 0) return@Comparator dateResult
+
+                    // 2. Priority: Task with reminder comes first
+                    val hasReminder1 = t1.reminderTime != null
+                    val hasReminder2 = t2.reminderTime != null
+                    
+                    if (hasReminder1 && !hasReminder2) return@Comparator -1
+                    if (!hasReminder1 && hasReminder2) return@Comparator 1
+                    
+                    // 3. Compare Reminder Time (Always Ascending: Earliest first)
+                    if (hasReminder1 && hasReminder2) {
+                        // Both have reminders, compare time
+                        t1.reminderTime!!.compareTo(t2.reminderTime!!)
+                    } else {
+                        // Neither has reminder, keep stable (or sort by creation?)
+                        // Let's use ID for stability or creation date
+                        t2.createdAt.compareTo(t1.createdAt) // Newest created first within group
+                    }
+                }
+                state.tasks.sortedWith(comparator)
+            }
+            SortOption.CUSTOM -> {
+                state.tasks.sortedBy { it.orderIndex }
+            }
+        }
+        state.copy(tasks = sortedTasks, sortAscending = sortAscending)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), TaskUiState())
+
+    fun setSortOption(option: SortOption) {
+        if (_sortOption.value == option) {
+            _sortAscending.value = !_sortAscending.value
+        } else {
+            _sortOption.value = option
+            _sortAscending.value = false // Default to descending when switching
+        }
+    }
+
+    private fun getStartOfDay(millis: Long): Long {
+        val calendar = java.util.Calendar.getInstance()
+        calendar.timeInMillis = millis
+        calendar.set(java.util.Calendar.HOUR_OF_DAY, 0)
+        calendar.set(java.util.Calendar.MINUTE, 0)
+        calendar.set(java.util.Calendar.SECOND, 0)
+        calendar.set(java.util.Calendar.MILLISECOND, 0)
+        return calendar.timeInMillis
+    }
+
+    fun updateAllTasksOrder(tasks: List<Task>) {
+        viewModelScope.launch {
+             val updatedTasks = tasks.mapIndexed { index, task ->
+                task.copy(orderIndex = index)
+            }
+            taskDao.updateTasks(updatedTasks)
+        }
+    }
+
+
+
 
     fun loadCalendars() {
         viewModelScope.launch {

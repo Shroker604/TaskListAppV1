@@ -24,6 +24,9 @@ interface TaskDao {
     @Update
     suspend fun updateTask(task: Task)
 
+    @Update
+    suspend fun updateTasks(tasks: List<Task>)
+
     @Query("DELETE FROM tasks WHERE isCompleted = 1")
     suspend fun deleteCompletedTasks()
 

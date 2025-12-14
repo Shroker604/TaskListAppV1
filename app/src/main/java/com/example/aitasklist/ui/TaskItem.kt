@@ -11,6 +11,14 @@ import com.example.aitasklist.R
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.filled.Menu
+import androidx.compose.foundation.clickable
+
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -32,11 +40,28 @@ fun TaskItem(
     onDateChange: (Long) -> Unit,
     onAddToCalendar: () -> Unit,
     onOpenCalendar: () -> Unit,
-    onSetReminder: () -> Unit
+    onSetReminder: () -> Unit,
+    showDragHandle: Boolean = false,
+    dragModifier: Modifier = Modifier,
+    onEnterReorderMode: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val calendar = Calendar.getInstance()
+    // ... rest of init code
+
     calendar.timeInMillis = task.scheduledDate
+
+    val currentCalendar = Calendar.getInstance()
+    val taskCalendar = Calendar.getInstance()
+    taskCalendar.timeInMillis = task.scheduledDate
+
+    var showContextMenu by remember { mutableStateOf(false) }
+
+    val isOverdue = !task.isCompleted && (
+            taskCalendar.get(Calendar.YEAR) < currentCalendar.get(Calendar.YEAR) ||
+                    (taskCalendar.get(Calendar.YEAR) == currentCalendar.get(Calendar.YEAR) &&
+                            taskCalendar.get(Calendar.DAY_OF_YEAR) < currentCalendar.get(Calendar.DAY_OF_YEAR))
+            )
 
     val datePickerDialog = DatePickerDialog(
         context,
@@ -57,79 +82,123 @@ fun TaskItem(
             .fillMaxWidth()
             .combinedClickable(
                 onClick = {},
-                onLongClick = onSetReminder
+                onLongClick = { 
+                    if (!showDragHandle) {
+                        showContextMenu = true 
+                    }
+                }
             ),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
-        Row(
-            modifier = Modifier
-                .padding(horizontal = 16.dp, vertical = 12.dp)
-                .fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Checkbox(
-                checked = task.isCompleted,
-                onCheckedChange = onCheckedChange
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = task.content,
-                    style = if (task.isCompleted) {
-                        MaterialTheme.typography.bodyLarge.copy(
-                            textDecoration = TextDecoration.LineThrough,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    } else {
-                        MaterialTheme.typography.bodyLarge
+        Box {
+             DropdownMenu(
+                expanded = showContextMenu,
+                onDismissRequest = { showContextMenu = false }
+            ) {
+                DropdownMenuItem(
+                    text = { Text("Set/Edit Reminder") },
+                    onClick = {
+                        showContextMenu = false
+                        onSetReminder()
+                    },
+                    leadingIcon = {
+                        Icon(Icons.Default.Notifications, contentDescription = null)
                     }
                 )
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                DropdownMenuItem(
+                    text = { Text("Reorder Tasks") },
+                    onClick = {
+                        showContextMenu = false
+                        onEnterReorderMode()
+                    },
+                    leadingIcon = {
+                        Icon(Icons.Default.List, contentDescription = null)
+                    }
+                )
+            }
+            
+            Row(
+                modifier = Modifier
+                    .padding(horizontal = 16.dp, vertical = 12.dp)
+                    .fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (showDragHandle) {
+                    Icon(
+                        imageVector = Icons.Filled.Menu,
+                        contentDescription = "Reorder",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = dragModifier
+                            .size(24.dp)
+                            .padding(end = 8.dp)
+                    )
+                }
+
+                Checkbox(
+                    checked = task.isCompleted,
+                    onCheckedChange = onCheckedChange,
+                    enabled = !showDragHandle
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = dateFormat.format(Date(task.scheduledDate)),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.secondary
+                        text = task.content,
+                        style = if (task.isCompleted) {
+                            MaterialTheme.typography.bodyLarge.copy(
+                                textDecoration = TextDecoration.LineThrough,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        } else {
+                            MaterialTheme.typography.bodyLarge
+                        }
                     )
-                    
-                    if (task.reminderTime != null) {
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Icon(
-                            imageVector = Icons.Default.Notifications,
-                            contentDescription = "Reminder set",
-                            modifier = Modifier.size(12.dp),
-                            tint = MaterialTheme.colorScheme.secondary
-                        )
-                        Spacer(modifier = Modifier.width(2.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            text = timeFormat.format(Date(task.reminderTime)),
+                            text = dateFormat.format(Date(task.scheduledDate)),
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.secondary
+                            color = if (isOverdue) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.secondary
                         )
+                        
+                        if (task.reminderTime != null) {
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Icon(
+                                imageVector = Icons.Default.Notifications,
+                                contentDescription = "Reminder set",
+                                modifier = Modifier.size(12.dp),
+                                tint = MaterialTheme.colorScheme.secondary
+                            )
+                            Spacer(modifier = Modifier.width(2.dp))
+                            Text(
+                                text = timeFormat.format(Date(task.reminderTime)),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.secondary
+                            )
+                        }
                     }
                 }
-            }
-            IconButton(onClick = { datePickerDialog.show() }) {
-                Icon(
-                    imageVector = Icons.Default.DateRange,
-                    contentDescription = stringResource(R.string.change_date_desc),
-                    tint = MaterialTheme.colorScheme.primary
-                )
-            }
-            if (task.calendarEventId == null) {
-                IconButton(onClick = onAddToCalendar) {
+                IconButton(onClick = { datePickerDialog.show() }, enabled = !showDragHandle) {
                     Icon(
-                        imageVector = Icons.Default.Add,
-                        contentDescription = stringResource(R.string.add_to_calendar_desc),
-                        tint = MaterialTheme.colorScheme.primary
+                        imageVector = Icons.Default.DateRange,
+                        contentDescription = stringResource(R.string.change_date_desc),
+                        tint = if (!showDragHandle) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
                     )
                 }
-            } else {
-                IconButton(onClick = onOpenCalendar) {
-                    Icon(
-                        imageVector = Icons.Default.Edit,
-                        contentDescription = stringResource(R.string.view_in_calendar_desc),
-                        tint = MaterialTheme.colorScheme.secondary
-                    )
+                if (task.calendarEventId == null) {
+                    IconButton(onClick = onAddToCalendar, enabled = !showDragHandle) {
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = stringResource(R.string.add_to_calendar_desc),
+                            tint = if (!showDragHandle) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                        )
+                    }
+                } else {
+                    IconButton(onClick = onOpenCalendar, enabled = !showDragHandle) {
+                        Icon(
+                            imageVector = Icons.Default.Edit,
+                            contentDescription = stringResource(R.string.view_in_calendar_desc),
+                            tint = if (!showDragHandle) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                        )
+                    }
                 }
             }
         }

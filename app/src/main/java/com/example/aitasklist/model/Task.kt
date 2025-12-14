@@ -12,5 +12,6 @@ data class Task(
     val createdAt: Long = System.currentTimeMillis(),
     val scheduledDate: Long = System.currentTimeMillis(),
     val calendarEventId: Long? = null,
-    val reminderTime: Long? = null
+    val reminderTime: Long? = null,
+    val orderIndex: Int = 0
 )
