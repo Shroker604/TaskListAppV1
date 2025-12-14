@@ -24,6 +24,7 @@ data class TaskUiState(
 )
 
 class TaskViewModel(application: Application) : AndroidViewModel(application) {
+    private val reminderManager = com.example.aitasklist.scheduler.ReminderManager(application)
     private val repository = GeminiRepository()
     private val calendarRepository = CalendarRepository(application)
     private val taskDao = (application as TaskApplication).database.taskDao()
@@ -84,6 +85,10 @@ class TaskViewModel(application: Application) : AndroidViewModel(application) {
             val task = uiState.value.tasks.find { it.id == taskId }
             task?.let {
                 taskDao.updateTask(it.copy(isCompleted = !it.isCompleted))
+                // Cancel reminder if completed
+                if (!it.isCompleted) { 
+                    reminderManager.cancelReminder(it.id)
+                }
             }
         }
     }
@@ -107,6 +112,16 @@ class TaskViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun updateTaskReminder(taskId: String, time: Long) {
+        viewModelScope.launch {
+            val task = uiState.value.tasks.find { it.id == taskId }
+            task?.let {
+                taskDao.updateTask(it.copy(reminderTime = time))
+                reminderManager.scheduleReminder(it.id, it.content, time)
+            }
+        }
+    }
+
     fun removeCompletedTasks() {
         viewModelScope.launch {
             val completedTasks = uiState.value.tasks.filter { it.isCompleted }
@@ -114,6 +129,7 @@ class TaskViewModel(application: Application) : AndroidViewModel(application) {
                 if (task.calendarEventId != null) {
                     calendarRepository.deleteCalendarEvent(task.calendarEventId)
                 }
+                reminderManager.cancelReminder(task.id)
             }
             taskDao.deleteCompletedTasks()
         }
@@ -126,6 +142,7 @@ class TaskViewModel(application: Application) : AndroidViewModel(application) {
                 if (it.calendarEventId != null) {
                     calendarRepository.deleteCalendarEvent(it.calendarEventId)
                 }
+                reminderManager.cancelReminder(it.id)
                 taskDao.deleteTask(it)
             }
         }
@@ -138,6 +155,7 @@ class TaskViewModel(application: Application) : AndroidViewModel(application) {
                 if (task.calendarEventId != null) {
                     calendarRepository.deleteCalendarEvent(task.calendarEventId)
                 }
+                reminderManager.cancelReminder(task.id)
             }
             taskDao.deleteAllTasks()
         }

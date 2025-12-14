@@ -48,6 +48,10 @@ fun TaskListScreen(
     
     val context = LocalContext.current
     var pendingCalendarTask by remember { mutableStateOf<Task?>(null) }
+    
+    // Reminder state
+    var timePickerDialog by remember { mutableStateOf<android.app.TimePickerDialog?>(null) }
+    var taskIdForReminder by remember { mutableStateOf<String?>(null) }
 
     val calendarLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
@@ -61,7 +65,26 @@ fun TaskListScreen(
                 pendingCalendarTask = null
             }
         } else {
-            Toast.makeText(context, context.getString(R.string.permission_denied), Toast.LENGTH_SHORT).show()
+            // Only show toast if it was a calendar request (pending task set)
+            if (pendingCalendarTask != null) {
+                Toast.makeText(context, context.getString(R.string.permission_denied), Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+    
+    val notificationLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted: Boolean ->
+        if (!isGranted) {
+           // Optional: Show rationale
+        }
+    }
+    
+    LaunchedEffect(Unit) {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(context, android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                notificationLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+            }
         }
     }
 
@@ -226,6 +249,36 @@ fun TaskListScreen(
                                     Toast.makeText(context, context.getString(R.string.event_not_found_resync), Toast.LENGTH_SHORT).show()
                                 }
                             )
+                        },
+                        onSetReminder = {
+                            taskIdForReminder = task.id
+                            val cal = java.util.Calendar.getInstance()
+                            if (task.reminderTime != null) {
+                                cal.timeInMillis = task.reminderTime
+                            }
+                            timePickerDialog = android.app.TimePickerDialog(
+                                context,
+                                { _, hourOfDay, minute ->
+                                    val newCal = java.util.Calendar.getInstance()
+                                    newCal.set(java.util.Calendar.HOUR_OF_DAY, hourOfDay)
+                                    newCal.set(java.util.Calendar.MINUTE, minute)
+                                    newCal.set(java.util.Calendar.SECOND, 0)
+                                    
+                                    // If time is in past, add 1 day
+                                    if (newCal.timeInMillis <= System.currentTimeMillis()) {
+                                        newCal.add(java.util.Calendar.DAY_OF_YEAR, 1)
+                                    }
+                                    
+                                    taskIdForReminder?.let { id ->
+                                        viewModel.updateTaskReminder(id, newCal.timeInMillis)
+                                    }
+                                    taskIdForReminder = null
+                                },
+                                cal.get(java.util.Calendar.HOUR_OF_DAY),
+                                cal.get(java.util.Calendar.MINUTE),
+                                false 
+                            )
+                            timePickerDialog?.show()
                         }
                     )
                 }
