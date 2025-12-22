@@ -111,7 +111,7 @@ fun TaskItem(
     }
 
     val dateFormat = SimpleDateFormat("MMM dd, yyyy", Locale.getDefault())
-    val timeFormat = SimpleDateFormat("h:mm a", Locale.getDefault())
+    val timeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
 
     Card(
         modifier = Modifier

@@ -515,7 +515,7 @@ fun TaskListScreen(
                                         },
                                         cal.get(java.util.Calendar.HOUR_OF_DAY),
                                             cal.get(java.util.Calendar.MINUTE),
-                                            false 
+                                            true 
                                         )
                                         timePickerDialog?.show()
                                 },
@@ -597,7 +597,7 @@ fun TaskListScreen(
                                     },
                                     cal.get(java.util.Calendar.HOUR_OF_DAY),
                                         cal.get(java.util.Calendar.MINUTE),
-                                        false 
+                                        true 
                                     )
                                     timePickerDialog?.show()
                             },
