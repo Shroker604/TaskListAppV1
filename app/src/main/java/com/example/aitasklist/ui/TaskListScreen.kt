@@ -435,84 +435,179 @@ fun TaskListScreen(
                     }
                 }
             }
-        } else {
-            LazyColumn(
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.weight(1f)
-            ) {
-                items(uiState.tasks, key = { it.id }) { task ->
-                    TaskItem(
-                        task = task,
-                        onCheckedChange = { viewModel.toggleTaskCompletion(task.id) },
-                        onDateChange = { newDate -> viewModel.updateTaskDate(task.id, newDate) },
-                        onAddToCalendar = {
-                            pendingCalendarTask = task
-                            if (ContextCompat.checkSelfPermission(context, android.Manifest.permission.WRITE_CALENDAR) == PackageManager.PERMISSION_GRANTED) {
-                                viewModel.addToCalendar(task) { accountName ->
-                                    Toast.makeText(context, context.getString(R.string.added_to_calendar, accountName), Toast.LENGTH_SHORT).show()
-                                    pendingCalendarTask = null
-                                }
-                            } else {
-                                calendarLauncher.launch(arrayOf(
-                                    android.Manifest.permission.READ_CALENDAR,
-                                    android.Manifest.permission.WRITE_CALENDAR
-                                ))
-                            }
-                        },
-                        onOpenCalendar = {
-                            viewModel.openCalendarEvent(
+            } else {
+                LazyColumn(
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    // Split tasks for display
+                    val scheduledTasks = uiState.tasks.filter { it.scheduledDate != 0L || it.reminderTime != null }
+                    val otherTasks = uiState.tasks.filter { it.scheduledDate == 0L && it.reminderTime == null }
+
+                    if (scheduledTasks.isNotEmpty()) {
+                        item {
+                            Text(
+                                text = "--- Schedule ---",
+                                style = MaterialTheme.typography.titleMedium,
+                                modifier = Modifier.padding(vertical = 8.dp),
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                        items(scheduledTasks, key = { it.id }) { task ->
+                            TaskItem(
                                 task = task,
-                                onSuccess = { uri ->
-                                    val intent = Intent(Intent.ACTION_VIEW).apply {
-                                        data = uri
-                                    }
-                                    try {
-                                        context.startActivity(intent)
-                                    } catch (e: Exception) {
-                                        Toast.makeText(context, context.getString(R.string.could_not_open_calendar), Toast.LENGTH_SHORT).show()
+                                onCheckedChange = { viewModel.toggleTaskCompletion(task.id) },
+                                onDateChange = { newDate -> viewModel.updateTaskDate(task.id, newDate) },
+                                onAddToCalendar = {
+                                    pendingCalendarTask = task
+                                    if (ContextCompat.checkSelfPermission(context, android.Manifest.permission.WRITE_CALENDAR) == PackageManager.PERMISSION_GRANTED) {
+                                        viewModel.addToCalendar(task) { accountName ->
+                                            Toast.makeText(context, context.getString(R.string.added_to_calendar, accountName), Toast.LENGTH_SHORT).show()
+                                            pendingCalendarTask = null
+                                        }
+                                    } else {
+                                        calendarLauncher.launch(arrayOf(
+                                            android.Manifest.permission.READ_CALENDAR,
+                                            android.Manifest.permission.WRITE_CALENDAR
+                                        ))
                                     }
                                 },
-                                onError = {
-                                    Toast.makeText(context, context.getString(R.string.event_not_found_resync), Toast.LENGTH_SHORT).show()
+                                onOpenCalendar = {
+                                    viewModel.openCalendarEvent(
+                                        task = task,
+                                        onSuccess = { uri ->
+                                            val intent = Intent(Intent.ACTION_VIEW).apply {
+                                                data = uri
+                                            }
+                                            try {
+                                                context.startActivity(intent)
+                                            } catch (e: Exception) {
+                                                Toast.makeText(context, context.getString(R.string.could_not_open_calendar), Toast.LENGTH_SHORT).show()
+                                            }
+                                        },
+                                        onError = {
+                                            Toast.makeText(context, context.getString(R.string.event_not_found_resync), Toast.LENGTH_SHORT).show()
+                                        }
+                                    )
+                                },
+                                onSetReminder = {
+                                    taskIdForReminder = task.id
+                                    val cal = java.util.Calendar.getInstance()
+                                    if (task.reminderTime != null) {
+                                        cal.timeInMillis = task.reminderTime
+                                    }
+                                    timePickerDialog = android.app.TimePickerDialog(
+                                        context,
+                                        { _, hourOfDay, minute ->
+                                            val newCal = java.util.Calendar.getInstance()
+                                            newCal.set(java.util.Calendar.HOUR_OF_DAY, hourOfDay)
+                                            newCal.set(java.util.Calendar.MINUTE, minute)
+                                            newCal.set(java.util.Calendar.SECOND, 0)
+                                            
+                                            if (newCal.timeInMillis <= System.currentTimeMillis()) {
+                                                newCal.add(java.util.Calendar.DAY_OF_YEAR, 1)
+                                            }
+                                            
+                                            taskIdForReminder?.let { id ->
+                                                viewModel.updateTaskReminder(id, newCal.timeInMillis)
+                                            }
+                                            taskIdForReminder = null
+                                        },
+                                        cal.get(java.util.Calendar.HOUR_OF_DAY),
+                                            cal.get(java.util.Calendar.MINUTE),
+                                            false 
+                                        )
+                                        timePickerDialog?.show()
+                                },
+                                onEnterReorderMode = {
+                                    viewModel.setSortOption(SortOption.CUSTOM)
                                 }
                             )
-                        },
-                        onSetReminder = {
-                            taskIdForReminder = task.id
-                            val cal = java.util.Calendar.getInstance()
-                            if (task.reminderTime != null) {
-                                cal.timeInMillis = task.reminderTime
-                            }
-                            timePickerDialog = android.app.TimePickerDialog(
-                                context,
-                                { _, hourOfDay, minute ->
-                                    val newCal = java.util.Calendar.getInstance()
-                                    newCal.set(java.util.Calendar.HOUR_OF_DAY, hourOfDay)
-                                    newCal.set(java.util.Calendar.MINUTE, minute)
-                                    newCal.set(java.util.Calendar.SECOND, 0)
-                                    
-                                    if (newCal.timeInMillis <= System.currentTimeMillis()) {
-                                        newCal.add(java.util.Calendar.DAY_OF_YEAR, 1)
-                                    }
-                                    
-                                    taskIdForReminder?.let { id ->
-                                        viewModel.updateTaskReminder(id, newCal.timeInMillis)
-                                    }
-                                    taskIdForReminder = null
-                                },
-                                cal.get(java.util.Calendar.HOUR_OF_DAY),
-                                    cal.get(java.util.Calendar.MINUTE),
-                                    false 
-                                )
-                                timePickerDialog?.show()
-                        },
-                        onEnterReorderMode = {
-                            viewModel.setSortOption(SortOption.CUSTOM)
                         }
-                    )
+                    }
+
+                    item {
+                        Text(
+                            text = "--- Tasks ---",
+                            style = MaterialTheme.typography.titleMedium,
+                            modifier = Modifier.padding(vertical = 8.dp),
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+
+                    items(otherTasks, key = { it.id }) { task ->
+                        TaskItem(
+                            task = task,
+                            onCheckedChange = { viewModel.toggleTaskCompletion(task.id) },
+                            onDateChange = { newDate -> viewModel.updateTaskDate(task.id, newDate) },
+                            onAddToCalendar = {
+                                pendingCalendarTask = task
+                                if (ContextCompat.checkSelfPermission(context, android.Manifest.permission.WRITE_CALENDAR) == PackageManager.PERMISSION_GRANTED) {
+                                    viewModel.addToCalendar(task) { accountName ->
+                                        Toast.makeText(context, context.getString(R.string.added_to_calendar, accountName), Toast.LENGTH_SHORT).show()
+                                        pendingCalendarTask = null
+                                    }
+                                } else {
+                                    calendarLauncher.launch(arrayOf(
+                                        android.Manifest.permission.READ_CALENDAR,
+                                        android.Manifest.permission.WRITE_CALENDAR
+                                    ))
+                                }
+                            },
+                            onOpenCalendar = {
+                                viewModel.openCalendarEvent(
+                                    task = task,
+                                    onSuccess = { uri ->
+                                        val intent = Intent(Intent.ACTION_VIEW).apply {
+                                            data = uri
+                                        }
+                                        try {
+                                            context.startActivity(intent)
+                                        } catch (e: Exception) {
+                                            Toast.makeText(context, context.getString(R.string.could_not_open_calendar), Toast.LENGTH_SHORT).show()
+                                        }
+                                    },
+                                    onError = {
+                                        Toast.makeText(context, context.getString(R.string.event_not_found_resync), Toast.LENGTH_SHORT).show()
+                                    }
+                                )
+                            },
+                            onSetReminder = {
+                                taskIdForReminder = task.id
+                                val cal = java.util.Calendar.getInstance()
+                                if (task.reminderTime != null) {
+                                    cal.timeInMillis = task.reminderTime
+                                }
+                                timePickerDialog = android.app.TimePickerDialog(
+                                    context,
+                                    { _, hourOfDay, minute ->
+                                        val newCal = java.util.Calendar.getInstance()
+                                        newCal.set(java.util.Calendar.HOUR_OF_DAY, hourOfDay)
+                                        newCal.set(java.util.Calendar.MINUTE, minute)
+                                        newCal.set(java.util.Calendar.SECOND, 0)
+                                        
+                                        if (newCal.timeInMillis <= System.currentTimeMillis()) {
+                                            newCal.add(java.util.Calendar.DAY_OF_YEAR, 1)
+                                        }
+                                        
+                                        taskIdForReminder?.let { id ->
+                                            viewModel.updateTaskReminder(id, newCal.timeInMillis)
+                                        }
+                                        taskIdForReminder = null
+                                    },
+                                    cal.get(java.util.Calendar.HOUR_OF_DAY),
+                                        cal.get(java.util.Calendar.MINUTE),
+                                        false 
+                                    )
+                                    timePickerDialog?.show()
+                            },
+                            onEnterReorderMode = {
+                                viewModel.setSortOption(SortOption.CUSTOM)
+                            }
+                        )
+                    }
                 }
             }
         }
     }
-}
 }

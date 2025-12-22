@@ -70,7 +70,11 @@ fun TaskItem(
         val datePickerState = rememberDatePickerState(
             initialSelectedDateMillis = remember(task.scheduledDate) {
                 val cal = Calendar.getInstance()
-                cal.timeInMillis = task.scheduledDate
+                if (task.scheduledDate != 0L) {
+                    cal.timeInMillis = task.scheduledDate
+                } else {
+                    cal.timeInMillis = System.currentTimeMillis()
+                }
                 val utcCal = Calendar.getInstance(java.util.TimeZone.getTimeZone("UTC"))
                 utcCal.clear()
                 utcCal.set(cal.get(Calendar.YEAR), cal.get(Calendar.MONTH), cal.get(Calendar.DAY_OF_MONTH))
@@ -88,7 +92,11 @@ fun TaskItem(
                         utcCal.timeInMillis = utcMillis
                         
                         val localCal = Calendar.getInstance()
-                        localCal.timeInMillis = task.scheduledDate
+                        if (task.scheduledDate != 0L) {
+                            localCal.timeInMillis = task.scheduledDate
+                        } else {
+                            localCal.timeInMillis = System.currentTimeMillis()
+                        }
                         localCal.set(utcCal.get(Calendar.YEAR), utcCal.get(Calendar.MONTH), utcCal.get(Calendar.DAY_OF_MONTH))
                         onDateChange(localCal.timeInMillis)
                     }
@@ -181,11 +189,13 @@ fun TaskItem(
                         }
                     )
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = dateFormat.format(Date(task.scheduledDate)),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = if (isOverdue) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.secondary
-                        )
+                        if (task.scheduledDate != 0L) {
+                            Text(
+                                text = dateFormat.format(Date(task.scheduledDate)),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = if (isOverdue) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.secondary
+                            )
+                        }
                         
                         if (task.reminderTime != null) {
                             Spacer(modifier = Modifier.width(8.dp))

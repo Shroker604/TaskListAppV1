@@ -10,7 +10,7 @@ data class Task(
     val content: String,
     val isCompleted: Boolean = false,
     val createdAt: Long = System.currentTimeMillis(),
-    val scheduledDate: Long = System.currentTimeMillis(),
+    val scheduledDate: Long = 0L,
     val calendarEventId: Long? = null,
     val reminderTime: Long? = null,
     val orderIndex: Int = 0

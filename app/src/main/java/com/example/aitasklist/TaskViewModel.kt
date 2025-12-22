@@ -65,8 +65,10 @@ class TaskViewModel(application: Application) : AndroidViewModel(application) {
             SortOption.DATE_REMINDER -> {
                 val comparator = Comparator<Task> { t1, t2 ->
                     // 1. Compare Dates (Start of Day)
-                    val date1 = getStartOfDay(t1.scheduledDate)
-                    val date2 = getStartOfDay(t2.scheduledDate)
+                    // Treat 0L as "No Date", effectively infinite future or separate category
+                    val date1 = if (t1.scheduledDate == 0L) Long.MAX_VALUE else getStartOfDay(t1.scheduledDate)
+                    val date2 = if (t2.scheduledDate == 0L) Long.MAX_VALUE else getStartOfDay(t2.scheduledDate)
+                    
                     val dateResult = if (sortAscending) {
                         date1.compareTo(date2)
                     } else {
