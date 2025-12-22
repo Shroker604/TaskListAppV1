@@ -446,12 +446,15 @@ fun TaskListScreen(
 
                     if (scheduledTasks.isNotEmpty()) {
                         item {
-                            Text(
-                                text = "--- Schedule ---",
-                                style = MaterialTheme.typography.titleMedium,
-                                modifier = Modifier.padding(vertical = 8.dp),
-                                color = MaterialTheme.colorScheme.primary
-                            )
+                            Column(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
+                                Text(
+                                    text = "Schedule",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.padding(bottom = 4.dp)
+                                )
+                                Divider(color = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f))
+                            }
                         }
                         items(scheduledTasks, key = { it.id }) { task ->
                             TaskItem(
@@ -527,12 +530,15 @@ fun TaskListScreen(
                     }
 
                     item {
-                        Text(
-                            text = "--- Tasks ---",
-                            style = MaterialTheme.typography.titleMedium,
-                            modifier = Modifier.padding(vertical = 8.dp),
-                            color = MaterialTheme.colorScheme.primary
-                        )
+                        Column(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
+                            Text(
+                                text = "Tasks",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(bottom = 4.dp)
+                            )
+                            Divider(color = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f))
+                        }
                     }
 
                     items(otherTasks, key = { it.id }) { task ->
