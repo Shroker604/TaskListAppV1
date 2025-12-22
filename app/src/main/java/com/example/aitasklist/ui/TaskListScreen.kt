@@ -126,7 +126,7 @@ fun TaskListScreen(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = stringResource(R.string.app_name),
+                text = stringResource(R.string.app_header),
                 style = MaterialTheme.typography.headlineMedium
             )
             Row {
