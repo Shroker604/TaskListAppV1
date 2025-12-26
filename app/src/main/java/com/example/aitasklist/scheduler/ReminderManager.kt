@@ -40,10 +40,11 @@ class ReminderManager(private val context: Context) {
         }
     }
     
-    fun scheduleReminder(taskId: String, content: String, timeInMillis: Long) {
+    fun scheduleReminder(taskId: String, content: String, timeInMillis: Long, priority: String) {
         val intent = Intent(context, ReminderReceiver::class.java).apply {
             putExtra("taskId", taskId)
             putExtra("content", content)
+            putExtra("priority", priority)
         }
         
         val pendingIntent = PendingIntent.getBroadcast(
@@ -54,31 +55,39 @@ class ReminderManager(private val context: Context) {
         )
         
         try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                if (alarmManager.canScheduleExactAlarms()) {
+            if (priority == "HIGH") {
+                // Repeating alarm every 15 minutes for High Priority
+                alarmManager.setRepeating(
+                    AlarmManager.RTC_WAKEUP,
+                    timeInMillis,
+                    15 * 60 * 1000L, // 15 minutes
+                    pendingIntent
+                )
+            } else {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    if (alarmManager.canScheduleExactAlarms()) {
+                        alarmManager.setExactAndAllowWhileIdle(
+                            AlarmManager.RTC_WAKEUP,
+                            timeInMillis,
+                            pendingIntent
+                        )
+                    } else {
+                        alarmManager.set(
+                            AlarmManager.RTC_WAKEUP,
+                            timeInMillis,
+                            pendingIntent
+                        )
+                    }
+                } else {
                     alarmManager.setExactAndAllowWhileIdle(
                         AlarmManager.RTC_WAKEUP,
                         timeInMillis,
                         pendingIntent
                     )
-                } else {
-                    // Fallback to inexact standard set() which doesn't require permission
-                    alarmManager.set(
-                        AlarmManager.RTC_WAKEUP,
-                        timeInMillis,
-                        pendingIntent
-                    )
                 }
-            } else {
-                alarmManager.setExactAndAllowWhileIdle(
-                    AlarmManager.RTC_WAKEUP,
-                    timeInMillis,
-                    pendingIntent
-                )
             }
         } catch (e: Exception) {
             e.printStackTrace()
-            // Ultimate fallback
             try {
                 alarmManager.set(
                     AlarmManager.RTC_WAKEUP,

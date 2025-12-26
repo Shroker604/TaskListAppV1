@@ -339,6 +339,7 @@ fun TaskListScreen(
                                          ))
                                      }
                                  },
+                                 onPriorityChange = { newPriority -> viewModel.updateTaskPriority(task.id, newPriority) },
                                  onOpenCalendar = {
                                      viewModel.openCalendarEvent(
                                          task = task,
@@ -475,6 +476,7 @@ fun TaskListScreen(
                                         ))
                                     }
                                 },
+                                onPriorityChange = { newPriority -> viewModel.updateTaskPriority(task.id, newPriority) },
                                 onOpenCalendar = {
                                     viewModel.openCalendarEvent(
                                         task = task,
@@ -560,6 +562,7 @@ fun TaskListScreen(
                                     ))
                                 }
                             },
+                            onPriorityChange = { newPriority -> viewModel.updateTaskPriority(task.id, newPriority) },
                             onOpenCalendar = {
                                 viewModel.openCalendarEvent(
                                     task = task,

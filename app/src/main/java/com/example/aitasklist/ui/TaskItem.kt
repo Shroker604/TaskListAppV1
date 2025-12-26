@@ -13,6 +13,7 @@ import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.foundation.clickable
 
 import androidx.compose.runtime.remember
@@ -41,6 +42,7 @@ fun TaskItem(
     onAddToCalendar: () -> Unit,
     onOpenCalendar: () -> Unit,
     onSetReminder: () -> Unit,
+    onPriorityChange: (com.example.aitasklist.model.Priority) -> Unit,
     showDragHandle: Boolean = false,
     dragModifier: Modifier = Modifier,
     onEnterReorderMode: () -> Unit = {}
@@ -132,6 +134,30 @@ fun TaskItem(
                 onDismissRequest = { showContextMenu = false }
             ) {
                 DropdownMenuItem(
+                    text = { Text("Priority: ${task.priority.name}") },
+                    onClick = {
+                        showContextMenu = false
+                        // Cycle priority logic: LOW -> MEDIUM -> HIGH -> LOW
+                        val newPriority = when (task.priority) {
+                             com.example.aitasklist.model.Priority.LOW -> com.example.aitasklist.model.Priority.MEDIUM
+                             com.example.aitasklist.model.Priority.MEDIUM -> com.example.aitasklist.model.Priority.HIGH
+                             com.example.aitasklist.model.Priority.HIGH -> com.example.aitasklist.model.Priority.LOW
+                        }
+                        onPriorityChange(newPriority)
+                    },
+                    leadingIcon = {
+                        Icon(
+                             imageVector = Icons.Default.Star,
+                             contentDescription = null,
+                             tint = when (task.priority) {
+                                 com.example.aitasklist.model.Priority.HIGH -> androidx.compose.ui.graphics.Color.Red
+                                 com.example.aitasklist.model.Priority.MEDIUM -> androidx.compose.ui.graphics.Color.Yellow
+                                 else -> MaterialTheme.colorScheme.onSurface
+                             }
+                        )
+                    }
+                )
+                DropdownMenuItem(
                     text = { Text("Set/Edit Reminder") },
                     onClick = {
                         showContextMenu = false
@@ -189,7 +215,15 @@ fun TaskItem(
                         }
                     )
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        if (task.scheduledDate != 0L) {
+                         if (task.priority != com.example.aitasklist.model.Priority.LOW) {
+                             Text(
+                                 text = if (task.priority == com.example.aitasklist.model.Priority.HIGH) "!!!" else "!!",
+                                 style = MaterialTheme.typography.bodySmall.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold),
+                                 color = if (task.priority == com.example.aitasklist.model.Priority.HIGH) androidx.compose.ui.graphics.Color.Red else androidx.compose.ui.graphics.Color(0xFFFFA000), // Orange/Amber
+                                 modifier = Modifier.padding(end = 4.dp)
+                             )
+                         }
+                         if (task.scheduledDate != 0L) {
                             Text(
                                 text = dateFormat.format(Date(task.scheduledDate)),
                                 style = MaterialTheme.typography.bodySmall,

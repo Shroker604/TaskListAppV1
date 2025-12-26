@@ -13,5 +13,10 @@ data class Task(
     val scheduledDate: Long = 0L,
     val calendarEventId: Long? = null,
     val reminderTime: Long? = null,
-    val orderIndex: Int = 0
+    val orderIndex: Int = 0,
+    val priority: Priority = Priority.LOW
 )
+
+enum class Priority {
+    LOW, MEDIUM, HIGH
+}

@@ -203,7 +203,20 @@ class TaskViewModel(application: Application) : AndroidViewModel(application) {
             val task = uiState.value.tasks.find { it.id == taskId }
             task?.let {
                 taskDao.updateTask(it.copy(reminderTime = time))
-                reminderManager.scheduleReminder(it.id, it.content, time)
+                reminderManager.scheduleReminder(it.id, it.content, time, it.priority.name)
+            }
+        }
+    }
+
+    fun updateTaskPriority(taskId: String, priority: com.example.aitasklist.model.Priority) {
+        viewModelScope.launch {
+            val task = uiState.value.tasks.find { it.id == taskId }
+            task?.let {
+                taskDao.updateTask(it.copy(priority = priority))
+                // Reschedule if reminder exists to update channel/type
+                if (it.reminderTime != null) {
+                    reminderManager.scheduleReminder(it.id, it.content, it.reminderTime, priority.name)
+                }
             }
         }
     }
