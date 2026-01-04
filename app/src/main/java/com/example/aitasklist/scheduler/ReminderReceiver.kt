@@ -10,6 +10,10 @@ import com.example.aitasklist.MainActivity
 import com.example.aitasklist.R
 import com.example.aitasklist.model.Priority
 
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+
 class ReminderReceiver : BroadcastReceiver() {
     
     companion object {
@@ -24,14 +28,22 @@ class ReminderReceiver : BroadcastReceiver() {
         
         // Handle Actions
         if (intent.action == ACTION_COMPLETE) {
-             // Logic to mark task complete would ideally go through ViewModel or Repository
-             // For now, we mainly need to CANCEL the specific repeating alarm
-             val reminderManager = ReminderManager(context)
-             reminderManager.cancelReminder(taskId)
-             
-             // Dismiss notification
-             val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-             notificationManager.cancel(taskId.hashCode())
+             val pendingResult = goAsync()
+             CoroutineScope(Dispatchers.IO).launch { // Using IO dispatcher
+                 try {
+                     val app = context.applicationContext as com.example.aitasklist.TaskApplication
+                     val dao = app.database.taskDao()
+                     dao.markTaskCompleted(taskId)
+                     
+                     val reminderManager = ReminderManager(context)
+                     reminderManager.cancelReminder(taskId)
+                     
+                     val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                     notificationManager.cancel(taskId.hashCode())
+                 } finally {
+                     pendingResult.finish()
+                 }
+             }
              return
         } else if (intent.action == ACTION_RESCHEDULE) {
             val reminderManager = ReminderManager(context)

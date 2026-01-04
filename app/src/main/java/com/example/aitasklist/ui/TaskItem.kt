@@ -1,6 +1,5 @@
 package com.example.aitasklist.ui
 
-
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DateRange
@@ -8,13 +7,12 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.ui.res.stringResource
 import com.example.aitasklist.R
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Star
-import androidx.compose.foundation.clickable
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectTapGestures
 
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
@@ -43,14 +41,13 @@ fun TaskItem(
     onOpenCalendar: () -> Unit,
     onSetReminder: () -> Unit,
     onPriorityChange: (com.example.aitasklist.model.Priority) -> Unit,
+    onEditTask: () -> Unit,
     showDragHandle: Boolean = false,
     dragModifier: Modifier = Modifier,
     onEnterReorderMode: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val calendar = Calendar.getInstance()
-    // ... rest of init code
-
     calendar.timeInMillis = task.scheduledDate
 
     val currentCalendar = Calendar.getInstance()
@@ -58,13 +55,14 @@ fun TaskItem(
     taskCalendar.timeInMillis = task.scheduledDate
 
     var showContextMenu by remember { mutableStateOf(false) }
+    var pressOffset by remember { mutableStateOf(androidx.compose.ui.unit.DpOffset.Zero) }
+    val density = androidx.compose.ui.platform.LocalDensity.current
 
-    val isOverdue = !task.isCompleted && (
+    val isOverdue = !task.isCompleted && task.scheduledDate != 0L && (
             taskCalendar.get(Calendar.YEAR) < currentCalendar.get(Calendar.YEAR) ||
                     (taskCalendar.get(Calendar.YEAR) == currentCalendar.get(Calendar.YEAR) &&
                             taskCalendar.get(Calendar.DAY_OF_YEAR) < currentCalendar.get(Calendar.DAY_OF_YEAR))
             )
-
 
     var showDatePicker by remember { mutableStateOf(false) }
 
@@ -118,21 +116,40 @@ fun TaskItem(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .combinedClickable(
-                onClick = {},
-                onLongClick = { 
-                    if (!showDragHandle) {
-                        showContextMenu = true 
-                    }
-                }
-            ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            .pointerInput(Unit) {
+               detectTapGestures(
+                   onTap = { },
+                   onLongPress = { offset: androidx.compose.ui.geometry.Offset ->
+                       if (!showDragHandle) {
+                           showContextMenu = true
+                           with(density) {
+                               pressOffset = androidx.compose.ui.unit.DpOffset(offset.x.toDp(), offset.y.toDp())
+                           }
+                       }
+                   }
+               )
+            },
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isOverdue) androidx.compose.ui.graphics.Color(0xFFF08080) else MaterialTheme.colorScheme.surfaceVariant
+        )
     ) {
         Box {
              DropdownMenu(
                 expanded = showContextMenu,
-                onDismissRequest = { showContextMenu = false }
+                onDismissRequest = { showContextMenu = false },
+                offset = pressOffset
             ) {
+                DropdownMenuItem(
+                    text = { Text("Edit Task") },
+                    onClick = {
+                        showContextMenu = false
+                        onEditTask()
+                    },
+                    leadingIcon = {
+                        Icon(Icons.Default.Edit, contentDescription = null)
+                    }
+                )
                 DropdownMenuItem(
                     text = { Text("Priority: ${task.priority.name}") },
                     onClick = {

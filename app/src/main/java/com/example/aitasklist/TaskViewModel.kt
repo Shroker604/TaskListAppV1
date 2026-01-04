@@ -14,6 +14,7 @@ import com.example.aitasklist.model.Task
 import com.example.aitasklist.data.remote.GeminiRepository
 import com.example.aitasklist.data.repository.CalendarRepository
 import com.example.aitasklist.data.repository.CalendarInfo
+import com.example.aitasklist.data.UserPreferencesRepository
 
 enum class SortOption {
     CREATION_DATE, // Default: Newest first
@@ -36,6 +37,7 @@ class TaskViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = GeminiRepository()
     private val calendarRepository = CalendarRepository(application)
     private val taskDao = (application as TaskApplication).database.taskDao()
+    private val preferencesRepository = UserPreferencesRepository(application)
     
     private val _isLoading = MutableStateFlow(false)
     private val _error = MutableStateFlow<String?>(null)
@@ -43,6 +45,30 @@ class TaskViewModel(application: Application) : AndroidViewModel(application) {
     private val _defaultCalendarId = MutableStateFlow<Long?>(null)
     private val _sortOption = MutableStateFlow(SortOption.DATE_REMINDER)
     private val _sortAscending = MutableStateFlow(false)
+
+    val isDarkTheme = preferencesRepository.isDarkTheme.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = false
+    )
+
+    val isDailyPlanner = preferencesRepository.isDailyPlanner.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = false
+    )
+    
+    fun setDarkTheme(enabled: Boolean) {
+        viewModelScope.launch {
+            preferencesRepository.setDarkTheme(enabled)
+        }
+    }
+
+    fun setDailyPlanner(enabled: Boolean) {
+        viewModelScope.launch {
+            preferencesRepository.setDailyPlanner(enabled)
+        }
+    }
 
     val uiState: StateFlow<TaskUiState> = combine(
         taskDao.getAllTasks(),
@@ -84,10 +110,14 @@ class TaskViewModel(application: Application) : AndroidViewModel(application) {
                     if (hasReminder1 && !hasReminder2) return@Comparator -1
                     if (!hasReminder1 && hasReminder2) return@Comparator 1
                     
-                    // 3. Compare Reminder Time (Always Ascending: Earliest first)
+                    // 3. Compare Reminder Time
                     if (hasReminder1 && hasReminder2) {
-                        // Both have reminders, compare time
-                        t1.reminderTime!!.compareTo(t2.reminderTime!!)
+                        // Both have reminders, compare time respecting sort direction
+                        if (sortAscending) {
+                            t1.reminderTime!!.compareTo(t2.reminderTime!!)
+                        } else {
+                            t2.reminderTime!!.compareTo(t1.reminderTime!!)
+                        }
                     } else {
                         // Neither has reminder, keep stable (or sort by creation?)
                         // Let's use ID for stability or creation date
@@ -194,6 +224,15 @@ class TaskViewModel(application: Application) : AndroidViewModel(application) {
                         endTime = newDate + 3600000 // 1 hour
                     )
                 }
+            }
+        }
+    }
+    
+    fun updateTaskContent(taskId: String, newContent: String) {
+        viewModelScope.launch {
+            val task = uiState.value.tasks.find { it.id == taskId }
+            task?.let {
+                taskDao.updateTask(it.copy(content = newContent))
             }
         }
     }

@@ -32,7 +32,7 @@
         <receiver
             android:name=".TaskWidgetProvider"
             android:exported="true"
-            android:label="AI Task List">
+            android:label="@string/app_name">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>

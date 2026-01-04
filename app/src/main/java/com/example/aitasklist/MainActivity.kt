@@ -11,22 +11,27 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
 import com.example.aitasklist.ui.TaskListScreen
 
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            val isDarkTheme = remember { mutableStateOf(false) }
+            val viewModel: com.example.aitasklist.TaskViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
+            val isDarkTheme by viewModel.isDarkTheme.collectAsState()
             
             MaterialTheme(
-                colorScheme = if (isDarkTheme.value) androidx.compose.material3.darkColorScheme() else androidx.compose.material3.lightColorScheme()
+                colorScheme = if (isDarkTheme) androidx.compose.material3.darkColorScheme() else androidx.compose.material3.lightColorScheme()
             ) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
                     TaskListScreen(
-                        isDarkTheme = isDarkTheme.value,
-                        onThemeToggle = { isDarkTheme.value = !isDarkTheme.value }
+                        viewModel = viewModel,
+                        isDarkTheme = isDarkTheme,
+                        onThemeToggle = { viewModel.setDarkTheme(!isDarkTheme) }
                     )
                 }
             }
