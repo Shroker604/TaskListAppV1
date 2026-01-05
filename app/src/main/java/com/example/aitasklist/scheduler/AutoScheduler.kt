@@ -47,7 +47,7 @@ class AutoScheduler {
                 // Schedule Task
                 val newReminderTime = gap.start
                 val scheduledTask = task.copy(
-                    scheduledDate = scheduledDate,
+                    scheduledDate = newReminderTime, // Set Date to the actual slot time (not just start of day)
                     reminderTime = newReminderTime
                 )
                 scheduledTasks.add(scheduledTask)
