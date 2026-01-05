@@ -394,166 +394,22 @@ class TaskViewModel(application: Application) : AndroidViewModel(application) {
                 // Filter by Excluded Calendars
                 val excludedIds = excludedCalendarIds.value
                 var events = calendarRepository.getEventsInRange(now.timeInMillis, endOfWindow.timeInMillis, excludedIds)
-                
-                var importedCount = 0
-                var manualPushedCount = 0
 
                 // 3. PULL SYNC: Import new events from Calendar
-                // Run this ALWAYS to ensure we see "busy status" items user mentioned
-                events.forEach { event ->
-                    var existingTask = try {
-                        taskDao.getTaskByCalendarEventId(event.id.toString())
-                    } catch (e: Exception) { null }
-
-                    // DEDUPLICATION: If not found by ID, try Fuzzy Match (Title + Same Day)
-                    if (existingTask == null) {
-                        val startOfDay = getStartOfDay(event.startTime)
-                        val endOfDay = startOfDay + (24 * 60 * 60 * 1000) - 1
-                        existingTask = try {
-                            taskDao.findTaskByTitleAndDate(event.title, startOfDay, endOfDay)
-                        } catch (e: Exception) { null }
-
-                        // FLOATING MATCH: If still not found, try finding an UNSCHEDULED task with same Title
-                        if (existingTask == null) {
-                            existingTask = try {
-                                taskDao.findUnscheduledTaskByTitle(event.title)
-                            } catch (e: Exception) { null }
-                        }
-
-                        if (existingTask != null) {
-                            // Match Found (Fuzzy Day or Floating)! Link them.
-                             // Update local tasks to match GC time (User Request: "Let that be the google calendar time")
-                            val updatedTask = existingTask.copy(
-                                calendarEventId = event.id,
-                                scheduledDate = event.startTime,
-                                reminderTime = if (event.isAllDay) null else event.startTime // Sync Reminder to Start Time (Null if AllDay)
-                            )
-                            taskDao.updateTask(updatedTask)
-                            
-                            // Reschedule local reminder
-                            if (updatedTask.reminderTime != null) {
-                                reminderManager.scheduleReminder(updatedTask.id, updatedTask.content, updatedTask.reminderTime, updatedTask.priority.name)
-                            }
-                        }
-                    } else {
-                        // Task exists by ID. Update time to match GC if different? 
-                        // User request implies GC is source of truth for time on sync.
-                        if (existingTask.scheduledDate != event.startTime || existingTask.reminderTime != event.startTime) {
-                             val updatedTask = existingTask.copy(
-                                scheduledDate = event.startTime,
-                                reminderTime = if (event.isAllDay) null else event.startTime
-                            )
-                            taskDao.updateTask(updatedTask)
-                            if (updatedTask.reminderTime != null) {
-                                reminderManager.scheduleReminder(updatedTask.id, updatedTask.content, updatedTask.reminderTime, updatedTask.priority.name)
-                            }
-                        }
-                    }
-
-                    if (existingTask == null) {
-                        val newTask = Task(
-                            content = event.title,
-                            scheduledDate = event.startTime,
-                            calendarEventId = event.id,
-                            priority = com.example.aitasklist.model.Priority.MEDIUM,
-                            isCompleted = false,
-                            reminderTime = if (event.isAllDay) null else event.startTime // New Task gets Reminder at Event Start (Null if AllDay)
-                        )
-                        taskDao.insertTasks(listOf(newTask))
-                        
-                        // Schedule notification
-                        if (newTask.reminderTime != null) {
-                            reminderManager.scheduleReminder(newTask.id, newTask.content, newTask.reminderTime, newTask.priority.name)
-                        }
-                        
-                        importedCount++
-                    }
-                }
+                val importedCount = performPullSync(events)
 
                 // 4. PUSH SYNC: Identify Manual Local Changes
-                // Tasks with a Date set (in window) but NO Calendar ID.
-                // These are "tasks that have a date for today that doesn't seem to appear in google calendar"
-                val manualTasksToSync = uiState.value.tasks.filter { 
-                    !it.isCompleted && 
-                    it.scheduledDate >= now.timeInMillis && 
-                    it.scheduledDate <= endOfWindow.timeInMillis &&
-                    it.calendarEventId == null
-                }
-
-                if (manualTasksToSync.isNotEmpty()) {
-                    val updatedManualTasks = mutableListOf<Task>()
-                    val defaultDuration = com.example.aitasklist.scheduler.AutoScheduler.DEFAULT_TASK_DURATION_MS
-                    
-                    manualTasksToSync.forEach { task ->
-                        val endTime = task.scheduledDate + defaultDuration
-                        val result = calendarRepository.addToCalendar(
-                            title = task.content,
-                            description = "Synced from AI Task List",
-                            startTime = task.scheduledDate,
-                            endTime = endTime,
-                            calendarId = _defaultCalendarId.value,
-                            isAllDay = task.reminderTime == null // All Day if No Reminder Time
-                        )
-                        if (result != null) {
-                            manualPushedCount++
-                            updatedManualTasks.add(task.copy(calendarEventId = result.first))
-                        }
-                    }
-                    if (updatedManualTasks.isNotEmpty()) {
-                        taskDao.updateTasks(updatedManualTasks)
-                    }
-                    
-                    // RE-FETCH Events because we just added some, and we need accurate gaps for Auto-Schedule
-                    events = calendarRepository.getEventsInRange(now.timeInMillis, endOfWindow.timeInMillis, excludedIds)
+                val manualPushedCount = performPushSync(now.timeInMillis, endOfWindow.timeInMillis)
+                
+                // Re-fetch events if we pushed new ones, to ensure accurate gaps
+                if (manualPushedCount > 0) {
+                     events = calendarRepository.getEventsInRange(now.timeInMillis, endOfWindow.timeInMillis, excludedIds)
                 }
 
                 // 5. AUTO-SCHEDULE: Fill remaining gaps with unscheduled tasks
-                val busySlots = events.map { 
-                    com.example.aitasklist.scheduler.TimeSlot(it.startTime, it.endTime) 
-                }
-                val gaps = calendarGapManager.findGaps(now.timeInMillis, endOfWindow.timeInMillis, busySlots)
+                val autoScheduledCount = performAutoSchedule(now.timeInMillis, endOfWindow.timeInMillis, events)
 
-                val unscheduledTasks = uiState.value.tasks.filter { 
-                    !it.isCompleted && it.scheduledDate == 0L && it.reminderTime == null 
-                }
-                
-                // Normalize "Today" for scorer, but gaps cover tomorrow too
-                val todayNormalized = getStartOfDay(now.timeInMillis)
-                val scheduledTasks = autoScheduler.scheduleTasks(unscheduledTasks, gaps, todayNormalized)
-                var autoScheduledCount = 0
-
-                // 6. Update DB & Sync Auto-Scheduled Tasks
-                if (scheduledTasks.isNotEmpty()) {
-                    val finalTasks = mutableListOf<Task>()
-                    scheduledTasks.forEach { task ->
-                        val duration = com.example.aitasklist.scheduler.AutoScheduler.DEFAULT_TASK_DURATION_MS
-                        val startTime = task.scheduledDate 
-                        val endTime = startTime + duration
-                        val result = calendarRepository.addToCalendar(
-                            title = task.content,
-                            description = "Auto-Scheduled by AI Task List",
-                            startTime = startTime,
-                            endTime = endTime,
-                            calendarId = _defaultCalendarId.value,
-                            isAllDay = false // Auto-Scheduled always has time
-                        )
-
-                        val updatedTask = if (result != null) {
-                            task.copy(calendarEventId = result.first) 
-                        } else {
-                            task
-                        }
-                        
-                        updatedTask.reminderTime?.let { time ->
-                            reminderManager.scheduleReminder(updatedTask.id, updatedTask.content, time, updatedTask.priority.name)
-                        }
-                        finalTasks.add(updatedTask)
-                    }
-                    taskDao.updateTasks(finalTasks)
-                    autoScheduledCount = finalTasks.size
-                }
-
-                // 7. Feedback Construction
+                // 6. Feedback Construction
                 val parts = mutableListOf<String>()
                 if (importedCount > 0) parts.add("Imported $importedCount")
                 if (manualPushedCount > 0) parts.add("Synced $manualPushedCount local")
@@ -572,6 +428,162 @@ class TaskViewModel(application: Application) : AndroidViewModel(application) {
                 _isLoading.value = false
             }
         }
+    }
+
+    private suspend fun performPullSync(events: List<com.example.aitasklist.data.repository.CalendarEvent>): Int {
+        var count = 0
+        events.forEach { event ->
+            // Try ID Match first
+            var existingTask = try {
+                taskDao.getTaskByCalendarEventId(event.id.toString())
+            } catch (e: Exception) { null }
+
+            // Deduplication (Fuzzy + Unscheduled)
+            if (existingTask == null) {
+                val startOfDay = getStartOfDay(event.startTime)
+                val endOfDay = startOfDay + (24 * 60 * 60 * 1000) - 1
+                
+                // Fuzzy Match: Same Title + Same Day
+                existingTask = try {
+                    taskDao.findTaskByTitleAndDate(event.title, startOfDay, endOfDay)
+                } catch (e: Exception) { null }
+
+                // Unscheduled Match: Same Title + No Date
+                if (existingTask == null) {
+                    existingTask = try {
+                        taskDao.findUnscheduledTaskByTitle(event.title)
+                    } catch (e: Exception) { null }
+                }
+
+                // If Matched, Link & Sync Time
+                if (existingTask != null) {
+                    val updatedTask = existingTask.copy(
+                        calendarEventId = event.id,
+                        scheduledDate = event.startTime,
+                        reminderTime = if (event.isAllDay) null else event.startTime // Sync Reminder to Start Time (Null if AllDay)
+                    )
+                    taskDao.updateTask(updatedTask)
+                    
+                    // Reschedule local reminder
+                    updatedTask.reminderTime?.let {
+                         reminderManager.scheduleReminder(updatedTask.id, updatedTask.content, it, updatedTask.priority.name)
+                    }
+                }
+            } else {
+                // ID Match Exists: Sync Time if changed
+                if (existingTask.scheduledDate != event.startTime || existingTask.reminderTime != event.startTime) {
+                     val updatedTask = existingTask.copy(
+                        scheduledDate = event.startTime,
+                        reminderTime = if (event.isAllDay) null else event.startTime
+                    )
+                    taskDao.updateTask(updatedTask)
+                    updatedTask.reminderTime?.let {
+                        reminderManager.scheduleReminder(updatedTask.id, updatedTask.content, it, updatedTask.priority.name)
+                    }
+                }
+            }
+
+            // Create New if No Match Found
+            if (existingTask == null) {
+                val newTask = Task(
+                    content = event.title,
+                    scheduledDate = event.startTime,
+                    calendarEventId = event.id,
+                    priority = com.example.aitasklist.model.Priority.MEDIUM,
+                    isCompleted = false,
+                    reminderTime = if (event.isAllDay) null else event.startTime // New Task gets Reminder at Event Start (Null if AllDay)
+                )
+                taskDao.insertTasks(listOf(newTask))
+                
+                // Schedule notification
+                newTask.reminderTime?.let {
+                    reminderManager.scheduleReminder(newTask.id, newTask.content, it, newTask.priority.name)
+                }
+                
+                count++
+            }
+        }
+        return count
+    }
+
+    private suspend fun performPushSync(startTime: Long, endTime: Long): Int {
+        val tasksToSync = uiState.value.tasks.filter { 
+            !it.isCompleted && 
+            it.scheduledDate >= startTime && 
+            it.scheduledDate <= endTime &&
+            it.calendarEventId == null
+        }
+
+        if (tasksToSync.isEmpty()) return 0
+
+        var pushedCount = 0
+        val updatedTasks = mutableListOf<Task>()
+        val defaultDuration = com.example.aitasklist.scheduler.AutoScheduler.DEFAULT_TASK_DURATION_MS
+        
+        tasksToSync.forEach { task ->
+            val endParams = task.scheduledDate + defaultDuration
+            val result = calendarRepository.addToCalendar(
+                title = task.content,
+                description = "Synced from AI Task List",
+                startTime = task.scheduledDate,
+                endTime = endParams,
+                calendarId = _defaultCalendarId.value,
+                isAllDay = task.reminderTime == null // All Day if No Reminder Time
+            )
+            if (result != null) {
+                pushedCount++
+                updatedTasks.add(task.copy(calendarEventId = result.first))
+            }
+        }
+        if (updatedTasks.isNotEmpty()) {
+            taskDao.updateTasks(updatedTasks)
+        }
+        return pushedCount
+    }
+
+    private suspend fun performAutoSchedule(windowStart: Long, windowEnd: Long, events: List<com.example.aitasklist.data.repository.CalendarEvent>): Int {
+        val busySlots = events.map { 
+            com.example.aitasklist.scheduler.TimeSlot(it.startTime, it.endTime) 
+        }
+        val gaps = calendarGapManager.findGaps(windowStart, windowEnd, busySlots)
+
+        val unscheduledTasks = uiState.value.tasks.filter { 
+            !it.isCompleted && it.scheduledDate == 0L && it.reminderTime == null 
+        }
+        
+        val todayNormalized = getStartOfDay(windowStart)
+        val scheduledTasks = autoScheduler.scheduleTasks(unscheduledTasks, gaps, todayNormalized)
+        
+        if (scheduledTasks.isNotEmpty()) {
+            val finalTasks = mutableListOf<Task>()
+            scheduledTasks.forEach { task ->
+                val duration = com.example.aitasklist.scheduler.AutoScheduler.DEFAULT_TASK_DURATION_MS
+                val startTime = task.scheduledDate 
+                val endTime = startTime + duration
+                val result = calendarRepository.addToCalendar(
+                    title = task.content,
+                    description = "Auto-Scheduled by AI Task List",
+                    startTime = startTime,
+                    endTime = endTime,
+                    calendarId = _defaultCalendarId.value,
+                    isAllDay = false // Auto-Scheduled always has time
+                )
+
+                val updatedTask = if (result != null) {
+                    task.copy(calendarEventId = result.first) 
+                } else {
+                    task
+                }
+                
+                updatedTask.reminderTime?.let { time ->
+                    reminderManager.scheduleReminder(updatedTask.id, updatedTask.content, time, updatedTask.priority.name)
+                }
+                finalTasks.add(updatedTask)
+            }
+            taskDao.updateTasks(finalTasks)
+            return finalTasks.size
+        }
+        return 0
     }
 
     fun openCalendarEvent(task: Task, onSuccess: (android.net.Uri) -> Unit, onError: () -> Unit) {
