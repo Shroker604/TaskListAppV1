@@ -26,6 +26,8 @@ fun TaskHeader(
     onCancelReorder: () -> Unit,
     onThemeToggle: () -> Unit,
     onOpenCalendarDialog: () -> Unit,
+    onOpenFilterDialog: () -> Unit,
+    onAutoSchedule: () -> Unit,
     isDailyPlanner: Boolean = false,
     onToggleDailyPlanner: () -> Unit = {}
 ) {
@@ -135,15 +137,41 @@ fun TaskHeader(
                             }
                         )
                         DropdownMenuItem(
-                            text = { Text("Calendars") },
+                            text = { Text("Default Calendar") },
                             onClick = {
                                 onOpenCalendarDialog()
                                 showMenu = false
                             },
                             leadingIcon = {
                                 Icon(
-                                    Icons.Default.DateRange,
-                                    contentDescription = "Select Calendar"
+                                    Icons.Default.Edit,
+                                    contentDescription = "Default Calendar"
+                                )
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Sync Settings") },
+                            onClick = {
+                                onOpenFilterDialog()
+                                showMenu = false
+                            },
+                            leadingIcon = {
+                                Icon(
+                                    Icons.Default.Settings,
+                                    contentDescription = "Sync Settings"
+                                )
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Auto-Schedule Today") },
+                            onClick = {
+                                onAutoSchedule()
+                                showMenu = false
+                            },
+                            leadingIcon = {
+                                Icon(
+                                    Icons.Default.AutoAwesome,
+                                    contentDescription = "Auto-Schedule"
                                 )
                             }
                         )

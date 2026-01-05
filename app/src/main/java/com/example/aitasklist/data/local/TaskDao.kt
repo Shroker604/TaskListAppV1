@@ -38,4 +38,13 @@ interface TaskDao {
 
     @Query("UPDATE tasks SET isCompleted = 1 WHERE id = :taskId")
     suspend fun markTaskCompleted(taskId: String)
+
+    @Query("SELECT * FROM tasks WHERE calendarEventId = :eventId LIMIT 1")
+    suspend fun getTaskByCalendarEventId(eventId: String): Task?
+
+    @Query("SELECT * FROM tasks WHERE content = :title AND scheduledDate >= :startTime AND scheduledDate <= :endTime LIMIT 1")
+    suspend fun findTaskByTitleAndDate(title: String, startTime: Long, endTime: Long): Task?
+
+    @Query("SELECT * FROM tasks WHERE content = :title AND (scheduledDate = 0 OR scheduledDate IS NULL) LIMIT 1")
+    suspend fun findUnscheduledTaskByTitle(title: String): Task?
 }

@@ -7,7 +7,7 @@ import java.util.TimeZone
 
 class CalendarRepository(private val context: Context) {
 
-    fun addToCalendar(title: String, description: String, startTime: Long, endTime: Long, calendarId: Long? = null): Pair<Long, String>? {
+    fun addToCalendar(title: String, description: String, startTime: Long, endTime: Long, calendarId: Long? = null, isAllDay: Boolean = false): Pair<Long, String>? {
         val targetCalendarId: Long
         val accountName: String
 
@@ -26,7 +26,9 @@ class CalendarRepository(private val context: Context) {
             put(CalendarContract.Events.TITLE, title)
             put(CalendarContract.Events.DESCRIPTION, description)
             put(CalendarContract.Events.CALENDAR_ID, targetCalendarId)
+            put(CalendarContract.Events.CALENDAR_ID, targetCalendarId)
             put(CalendarContract.Events.EVENT_TIMEZONE, TimeZone.getDefault().id)
+            put(CalendarContract.Events.ALL_DAY, if (isAllDay) 1 else 0)
         }
 
         try {
@@ -179,6 +181,41 @@ class CalendarRepository(private val context: Context) {
         return calendars
     }
 
+    fun getAllCalendars(): List<CalendarInfo> {
+        val calendars = mutableListOf<CalendarInfo>()
+        val projection = arrayOf(
+            CalendarContract.Calendars._ID,
+            CalendarContract.Calendars.CALENDAR_DISPLAY_NAME,
+            CalendarContract.Calendars.ACCOUNT_NAME
+        )
+        // No Access Level Filter - Just Visible
+        val selection = "${CalendarContract.Calendars.VISIBLE} = 1"
+
+        try {
+            context.contentResolver.query(
+                CalendarContract.Calendars.CONTENT_URI,
+                projection,
+                selection,
+                null,
+                null
+            )?.use { cursor ->
+                val idCol = cursor.getColumnIndex(CalendarContract.Calendars._ID)
+                val nameCol = cursor.getColumnIndex(CalendarContract.Calendars.CALENDAR_DISPLAY_NAME)
+                val accountCol = cursor.getColumnIndex(CalendarContract.Calendars.ACCOUNT_NAME)
+
+                while (cursor.moveToNext()) {
+                    val id = cursor.getLong(idCol)
+                    val name = cursor.getString(nameCol) ?: "Unknown"
+                    val account = cursor.getString(accountCol) ?: "Unknown"
+                    calendars.add(CalendarInfo(id, name, account))
+                }
+            }
+        } catch (e: SecurityException) {
+            e.printStackTrace()
+        }
+        return calendars
+    }
+
     fun saveDefaultCalendarId(id: Long) {
         val prefs = context.getSharedPreferences("calendar_prefs", Context.MODE_PRIVATE)
         prefs.edit().putLong("default_calendar_id", id).apply()
@@ -189,6 +226,59 @@ class CalendarRepository(private val context: Context) {
         val id = prefs.getLong("default_calendar_id", -1)
         return if (id != -1L) id else null
     }
+    fun getEventsInRange(startMillis: Long, endMillis: Long, excludedCalendarIds: Set<String> = emptySet()): List<CalendarEvent> {
+        val events = mutableListOf<CalendarEvent>()
+        
+        // Use Instances table to correctly handle Recurrence and Strict Ranges
+        val builder = CalendarContract.Instances.CONTENT_URI.buildUpon()
+        android.content.ContentUris.appendId(builder, startMillis)
+        android.content.ContentUris.appendId(builder, endMillis)
+        
+        val projection = arrayOf(
+            CalendarContract.Instances._ID,
+            CalendarContract.Instances.TITLE,
+            CalendarContract.Instances.BEGIN,
+            CalendarContract.Instances.END,
+            CalendarContract.Instances.CALENDAR_ID,
+            CalendarContract.Events.ALL_DAY // Added to reading projection
+        )
+        
+        val sortOrder = "${CalendarContract.Instances.BEGIN} ASC"
+
+        try {
+            context.contentResolver.query(
+                builder.build(),
+                projection,
+                null,
+                null,
+                sortOrder
+            )?.use { cursor ->
+                val idCol = cursor.getColumnIndex(CalendarContract.Instances._ID)
+                val titleCol = cursor.getColumnIndex(CalendarContract.Instances.TITLE)
+                val startCol = cursor.getColumnIndex(CalendarContract.Instances.BEGIN)
+                val endCol = cursor.getColumnIndex(CalendarContract.Instances.END)
+                val calIdCol = cursor.getColumnIndex(CalendarContract.Instances.CALENDAR_ID)
+                val allDayCol = cursor.getColumnIndex(CalendarContract.Events.ALL_DAY)
+
+                while (cursor.moveToNext()) {
+                    val id = cursor.getLong(idCol)
+                    val title = cursor.getString(titleCol) ?: "No Title"
+                    val startTime = cursor.getLong(startCol)
+                    val endTime = cursor.getLong(endCol)
+                    val calendarId = cursor.getLong(calIdCol)
+                    val isAllDay = if (allDayCol != -1) cursor.getInt(allDayCol) == 1 else false
+
+                    if (!excludedCalendarIds.contains(calendarId.toString())) {
+                         events.add(CalendarEvent(id, title, startTime, endTime, isAllDay))
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        return events
+    }
 }
 
 data class CalendarInfo(val id: Long, val displayName: String, val accountName: String)
+data class CalendarEvent(val id: Long, val title: String, val startTime: Long, val endTime: Long, val isAllDay: Boolean)

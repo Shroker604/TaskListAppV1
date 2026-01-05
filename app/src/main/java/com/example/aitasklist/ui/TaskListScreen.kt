@@ -38,13 +38,21 @@ fun TaskListScreen(
     val uiState by viewModel.uiState.collectAsState()
     var textInput by remember { mutableStateOf("") }
     var showCalendarDialog by remember { mutableStateOf(false) }
-    
+    var showFilterDialog by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+
     LaunchedEffect(Unit) {
         viewModel.loadCalendars()
     }
     
-    val context = LocalContext.current
-    var pendingCalendarTask by remember { mutableStateOf<Task?>(null) }
+    LaunchedEffect(uiState.userMessage) {
+        uiState.userMessage?.let { message ->
+            Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+            viewModel.clearUserMessage()
+        }
+    }
+    
+    var pendingAction by remember { mutableStateOf<(() -> Unit)?>(null) }
     
     // Reminder state
     var timePickerDialog by remember { mutableStateOf<android.app.TimePickerDialog?>(null) }
@@ -56,15 +64,12 @@ fun TaskListScreen(
         val readGranted = permissions[android.Manifest.permission.READ_CALENDAR] == true
         val writeGranted = permissions[android.Manifest.permission.WRITE_CALENDAR] == true
 
-        if (readGranted && writeGranted && pendingCalendarTask != null) {
-            viewModel.addToCalendar(pendingCalendarTask!!) { accountName ->
-                Toast.makeText(context, context.getString(R.string.added_to_calendar, accountName), Toast.LENGTH_SHORT).show()
-                pendingCalendarTask = null
-            }
+        if (readGranted && writeGranted) {
+            pendingAction?.invoke()
+            pendingAction = null
         } else {
-            if (pendingCalendarTask != null) {
-                Toast.makeText(context, context.getString(R.string.permission_denied), Toast.LENGTH_SHORT).show()
-            }
+             Toast.makeText(context, context.getString(R.string.permission_denied), Toast.LENGTH_SHORT).show()
+             pendingAction = null
         }
     }
     
@@ -103,13 +108,15 @@ fun TaskListScreen(
             onCheckedChange = { viewModel.toggleTaskCompletion(task.id) },
             onDateChange = { newDate -> viewModel.updateTaskDate(task.id, newDate) },
             onAddToCalendar = {
-                pendingCalendarTask = task
-                if (ContextCompat.checkSelfPermission(context, android.Manifest.permission.WRITE_CALENDAR) == PackageManager.PERMISSION_GRANTED) {
+                val action = {
                     viewModel.addToCalendar(task) { accountName ->
                         Toast.makeText(context, context.getString(R.string.added_to_calendar, accountName), Toast.LENGTH_SHORT).show()
-                        pendingCalendarTask = null
                     }
+                }
+                if (ContextCompat.checkSelfPermission(context, android.Manifest.permission.WRITE_CALENDAR) == PackageManager.PERMISSION_GRANTED) {
+                    action()
                 } else {
+                    pendingAction = action
                     calendarLauncher.launch(arrayOf(
                         android.Manifest.permission.READ_CALENDAR,
                         android.Manifest.permission.WRITE_CALENDAR
@@ -214,6 +221,19 @@ fun TaskListScreen(
             },
             onThemeToggle = onThemeToggle,
             onOpenCalendarDialog = { showCalendarDialog = true },
+            onOpenFilterDialog = { showFilterDialog = true },
+            onAutoSchedule = { 
+                val action = { viewModel.autoScheduleToday() }
+                 if (ContextCompat.checkSelfPermission(context, android.Manifest.permission.READ_CALENDAR) == PackageManager.PERMISSION_GRANTED) {
+                    action()
+                } else {
+                    pendingAction = action
+                     calendarLauncher.launch(arrayOf(
+                        android.Manifest.permission.READ_CALENDAR,
+                        android.Manifest.permission.WRITE_CALENDAR
+                    ))
+                }
+            },
             isDailyPlanner = isDailyPlanner,
             onToggleDailyPlanner = { viewModel.setDailyPlanner(!isDailyPlanner) }
         )
@@ -225,6 +245,16 @@ fun TaskListScreen(
                 defaultCalendarId = uiState.defaultCalendarId,
                 onCalendarSelected = { viewModel.setDefaultCalendar(it) },
                 onDismiss = { showCalendarDialog = false }
+            )
+        }
+
+        if (showFilterDialog) {
+            CalendarFilterDialog(
+                calendars = uiState.allCalendars,
+                excludedCalendarIds = uiState.excludedCalendarIds,
+                onToggleExclusion = { id, excluded -> viewModel.toggleCalendarExclusion(id, excluded) },
+                onToggleGroupExclusion = { ids, excluded -> viewModel.setCalendarExclusionBatch(ids, excluded) },
+                onDismiss = { showFilterDialog = false }
             )
         }
         
