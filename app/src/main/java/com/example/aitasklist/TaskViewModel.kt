@@ -435,7 +435,7 @@ class TaskViewModel(application: Application) : AndroidViewModel(application) {
         events.forEach { event ->
             // Try ID Match first
             var existingTask = try {
-                taskDao.getTaskByCalendarEventId(event.id.toString())
+                taskDao.getTaskByCalendarEventId(event.id)
             } catch (e: Exception) { null }
 
             // Deduplication (Fuzzy + Unscheduled)
