@@ -424,16 +424,11 @@ class TaskViewModel(application: Application) : AndroidViewModel(application) {
                 val autoScheduledCount = performAutoSchedule(now.timeInMillis, endOfWindow.timeInMillis, events)
 
                 // 6. Feedback Construction
-                val parts = mutableListOf<String>()
-                if (importedCount > 0) parts.add("Imported $importedCount")
-                if (manualPushedCount > 0) parts.add("Synced $manualPushedCount local")
-                if (autoScheduledCount > 0) parts.add("Auto-Scheduled $autoScheduledCount")
+                val busyCount = events.size
+                val busySlots = events.map { com.example.aitasklist.scheduler.TimeSlot(it.startTime, it.endTime) }
+                val gaps = calendarGapManager.findGaps(now.timeInMillis, endOfWindow.timeInMillis, busySlots)
                 
-                if (parts.isNotEmpty()) {
-                    _userMessage.value = "Sync Complete: ${parts.joinToString(", ")}"
-                } else {
-                    _userMessage.value = "Sync Complete: No changes needed."
-                }
+                _userMessage.value = "Events: $busyCount, Gaps: ${gaps.size}. Scheduled: $autoScheduledCount. (Imp: $importedCount, Push: $manualPushedCount)"
 
             } catch (e: Exception) {
                  _error.value = "Sync Failed: ${e.message}"
