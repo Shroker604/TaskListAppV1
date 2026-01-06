@@ -395,10 +395,34 @@ class TaskViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             _isLoading.value = true
             try {
-                // 1. Define Window: Now -> End of Tomorrow (User Feedback: "Multiple items for tomorrow")
+                // 1. Define Window: Smart Rollover Check
                 val now = java.util.Calendar.getInstance()
+                
+                // Get Deadline Preference
+                val deadlineHour = preferencesRepository.autoScheduleDeadlineHour.first()
+                val currentHour = now.get(java.util.Calendar.HOUR_OF_DAY)
+                
+                var isRollover = false
+                val startOfWindow = if (currentHour >= deadlineHour) {
+                    isRollover = true
+                    java.util.Calendar.getInstance().apply {
+                        add(java.util.Calendar.DAY_OF_YEAR, 1) // Start Tomorrow
+                        set(java.util.Calendar.HOUR_OF_DAY, 8) // Default Start: 8 AM
+                        set(java.util.Calendar.MINUTE, 0)
+                        set(java.util.Calendar.SECOND, 0)
+                        set(java.util.Calendar.MILLISECOND, 0)
+                    }
+                } else {
+                    now // Start Now
+                }
+                
                 val endOfWindow = java.util.Calendar.getInstance().apply {
-                    add(java.util.Calendar.DAY_OF_YEAR, 1) // Tomorrow
+                    timeInMillis = startOfWindow.timeInMillis // Base end relative to start frame
+                    if (!isRollover) add(java.util.Calendar.DAY_OF_YEAR, 1) // If starting today, go to end of tomorrow (wide window)
+                    // If rolling over to tomorrow, we stay in tomorrow (single day focus) or extend to next day?
+                    // Let's keep the "Today + Tomorrow" wide window logic, but shifted.
+                    // If rollover: Start Tomorrow -> End Tomorrow
+                    
                     set(java.util.Calendar.HOUR_OF_DAY, 23)
                     set(java.util.Calendar.MINUTE, 59)
                 }
@@ -407,28 +431,29 @@ class TaskViewModel(application: Application) : AndroidViewModel(application) {
                 // This is the source of truth for "Busy" slots
                 // Filter by Excluded Calendars
                 val excludedIds = excludedCalendarIds.value
-                var events = calendarRepository.getEventsInRange(now.timeInMillis, endOfWindow.timeInMillis, excludedIds)
+                var events = calendarRepository.getEventsInRange(startOfWindow.timeInMillis, endOfWindow.timeInMillis, excludedIds)
 
                 // 3. PULL SYNC: Import new events from Calendar
                 val importedCount = performPullSync(events)
 
                 // 4. PUSH SYNC: Identify Manual Local Changes
-                val manualPushedCount = performPushSync(now.timeInMillis, endOfWindow.timeInMillis)
+                val manualPushedCount = performPushSync(startOfWindow.timeInMillis, endOfWindow.timeInMillis)
                 
                 // Re-fetch events if we pushed new ones, to ensure accurate gaps
                 if (manualPushedCount > 0) {
-                     events = calendarRepository.getEventsInRange(now.timeInMillis, endOfWindow.timeInMillis, excludedIds)
+                     events = calendarRepository.getEventsInRange(startOfWindow.timeInMillis, endOfWindow.timeInMillis, excludedIds)
                 }
 
                 // 5. AUTO-SCHEDULE: Fill remaining gaps with unscheduled tasks
-                val autoScheduledCount = performAutoSchedule(now.timeInMillis, endOfWindow.timeInMillis, events)
+                val autoScheduledCount = performAutoSchedule(startOfWindow.timeInMillis, endOfWindow.timeInMillis, events)
 
                 // 6. Feedback Construction
                 val busyCount = events.size
                 val busySlots = events.map { com.example.aitasklist.scheduler.TimeSlot(it.startTime, it.endTime) }
-                val gaps = calendarGapManager.findGaps(now.timeInMillis, endOfWindow.timeInMillis, busySlots)
+                val gaps = calendarGapManager.findGaps(startOfWindow.timeInMillis, endOfWindow.timeInMillis, busySlots)
                 
-                _userMessage.value = "Events: $busyCount, Gaps: ${gaps.size}. Scheduled: $autoScheduledCount. (Imp: $importedCount, Push: $manualPushedCount)"
+                val deadlineMsg = if (isRollover) "(Too late for today, scheduled for Tomorrow)" else ""
+                _userMessage.value = "Events: $busyCount, Gaps: ${gaps.size}. Scheduled: $autoScheduledCount. $deadlineMsg"
 
             } catch (e: Exception) {
                  _error.value = "Sync Failed: ${e.message}"

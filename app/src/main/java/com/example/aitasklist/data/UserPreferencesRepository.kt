@@ -39,15 +39,27 @@ class UserPreferencesRepository(private val context: Context) {
     }
 
     private val EXCLUDED_CALENDAR_IDS = androidx.datastore.preferences.core.stringSetPreferencesKey("excluded_calendar_ids")
+    private val AUTO_SCHEDULE_DEADLINE_HOUR = androidx.datastore.preferences.core.intPreferencesKey("auto_schedule_deadline_hour")
 
     val excludedCalendarIds: Flow<Set<String>> = context.dataStore.data
         .map { preferences ->
             preferences[EXCLUDED_CALENDAR_IDS] ?: emptySet()
         }
+        
+    val autoScheduleDeadlineHour: Flow<Int> = context.dataStore.data
+        .map { preferences ->
+            preferences[AUTO_SCHEDULE_DEADLINE_HOUR] ?: 21 // Default: 9 PM
+        }
 
     suspend fun setExcludedCalendarIds(ids: Set<String>) {
         context.dataStore.edit { preferences ->
             preferences[EXCLUDED_CALENDAR_IDS] = ids
+        }
+    }
+    
+    suspend fun setAutoScheduleDeadlineHour(hour: Int) {
+        context.dataStore.edit { preferences ->
+            preferences[AUTO_SCHEDULE_DEADLINE_HOUR] = hour
         }
     }
 }
