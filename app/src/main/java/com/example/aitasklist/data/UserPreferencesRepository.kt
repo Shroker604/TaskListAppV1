@@ -37,4 +37,17 @@ class UserPreferencesRepository(private val context: Context) {
             preferences[IS_DAILY_PLANNER] = enabled
         }
     }
+
+    private val EXCLUDED_CALENDAR_IDS = androidx.datastore.preferences.core.stringSetPreferencesKey("excluded_calendar_ids")
+
+    val excludedCalendarIds: Flow<Set<String>> = context.dataStore.data
+        .map { preferences ->
+            preferences[EXCLUDED_CALENDAR_IDS] ?: emptySet()
+        }
+
+    suspend fun setExcludedCalendarIds(ids: Set<String>) {
+        context.dataStore.edit { preferences ->
+            preferences[EXCLUDED_CALENDAR_IDS] = ids
+        }
+    }
 }

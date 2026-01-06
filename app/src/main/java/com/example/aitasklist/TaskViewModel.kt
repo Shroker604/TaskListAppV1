@@ -26,10 +26,13 @@ data class TaskUiState(
     val tasks: List<Task> = emptyList(),
     val isLoading: Boolean = false,
     val error: String? = null,
-    val calendars: List<CalendarInfo> = emptyList(),
+    val calendars: List<CalendarInfo> = emptyList(), // Writable for Default
+    val allCalendars: List<CalendarInfo> = emptyList(), // All for Filtering
     val defaultCalendarId: Long? = null,
     val sortOption: SortOption = SortOption.DATE_REMINDER,
-    val sortAscending: Boolean = false // Default: Descending (Newest First)
+    val sortAscending: Boolean = false, // Default: Descending (Newest First)
+    val userMessage: String? = null,
+    val excludedCalendarIds: Set<String> = emptySet()
 )
 
 class TaskViewModel(application: Application) : AndroidViewModel(application) {
@@ -38,10 +41,14 @@ class TaskViewModel(application: Application) : AndroidViewModel(application) {
     private val calendarRepository = CalendarRepository(application)
     private val taskDao = (application as TaskApplication).database.taskDao()
     private val preferencesRepository = UserPreferencesRepository(application)
+    private val calendarGapManager = com.example.aitasklist.scheduler.CalendarGapManager()
+    private val autoScheduler = com.example.aitasklist.scheduler.AutoScheduler()
     
     private val _isLoading = MutableStateFlow(false)
     private val _error = MutableStateFlow<String?>(null)
+    private val _userMessage = MutableStateFlow<String?>(null) // Success messages
     private val _calendars = MutableStateFlow<List<CalendarInfo>>(emptyList())
+    private val _allCalendars = MutableStateFlow<List<CalendarInfo>>(emptyList())
     private val _defaultCalendarId = MutableStateFlow<Long?>(null)
     private val _sortOption = MutableStateFlow(SortOption.DATE_REMINDER)
     private val _sortAscending = MutableStateFlow(false)
@@ -56,6 +63,12 @@ class TaskViewModel(application: Application) : AndroidViewModel(application) {
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
         initialValue = false
+    )
+
+    val excludedCalendarIds = preferencesRepository.excludedCalendarIds.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptySet()
     )
     
     fun setDarkTheme(enabled: Boolean) {
@@ -75,53 +88,78 @@ class TaskViewModel(application: Application) : AndroidViewModel(application) {
         _isLoading,
         _error,
         _calendars,
-        _defaultCalendarId
-    ) { tasks, isLoading, error, calendars, defaultId ->
-        TaskUiState(tasks = tasks, isLoading = isLoading, error = error, calendars = calendars, defaultCalendarId = defaultId)
-    }.combine(_sortOption) { state, sortOption -> state.copy(sortOption = sortOption) }
+        _allCalendars
+    ) { tasks, isLoading, error, calendars, allCalendars ->
+        TaskUiState(
+            tasks = tasks, 
+            isLoading = isLoading, 
+            error = error, 
+            calendars = calendars, 
+            allCalendars = allCalendars
+        )
+    }.combine(_defaultCalendarId) { state, defaultId ->
+        state.copy(defaultCalendarId = defaultId)
+    }.combine(_userMessage) { state, userMessage ->
+        state.copy(userMessage = userMessage)
+    }.combine(_sortOption) { state, sortOption -> state.copy(sortOption = sortOption) 
+    }.combine(excludedCalendarIds) { state, excluded -> state.copy(excludedCalendarIds = excluded) }
     .combine(_sortAscending) { state, sortAscending ->
         val sortedTasks = when (state.sortOption) {
             SortOption.CREATION_DATE -> {
-                if (sortAscending) {
-                    state.tasks.sortedBy { it.createdAt }
-                } else {
-                    state.tasks.sortedByDescending { it.createdAt }
+                val comparator = Comparator<Task> { t1, t2 ->
+                    // 1. Completion Status (Active first)
+                    if (t1.isCompleted != t2.isCompleted) {
+                        if (t1.isCompleted) 1 else -1
+                    } else {
+                        // 2. Creation Date
+                        if (sortAscending) {
+                            t1.createdAt.compareTo(t2.createdAt)
+                        } else {
+                            t2.createdAt.compareTo(t1.createdAt)
+                        }
+                    }
                 }
+                state.tasks.sortedWith(comparator)
             }
             SortOption.DATE_REMINDER -> {
                 val comparator = Comparator<Task> { t1, t2 ->
-                    // 1. Compare Dates (Start of Day)
-                    // Treat 0L as "No Date", effectively infinite future or separate category
-                    val date1 = if (t1.scheduledDate == 0L) Long.MAX_VALUE else getStartOfDay(t1.scheduledDate)
-                    val date2 = if (t2.scheduledDate == 0L) Long.MAX_VALUE else getStartOfDay(t2.scheduledDate)
-                    
-                    val dateResult = if (sortAscending) {
-                        date1.compareTo(date2)
+                    // 1. Completion Status (Active first)
+                    if (t1.isCompleted != t2.isCompleted) {
+                        if (t1.isCompleted) 1 else -1
                     } else {
-                        date2.compareTo(date1)
-                    }
-
-                    if (dateResult != 0) return@Comparator dateResult
-
-                    // 2. Priority: Task with reminder comes first
-                    val hasReminder1 = t1.reminderTime != null
-                    val hasReminder2 = t2.reminderTime != null
-                    
-                    if (hasReminder1 && !hasReminder2) return@Comparator -1
-                    if (!hasReminder1 && hasReminder2) return@Comparator 1
-                    
-                    // 3. Compare Reminder Time
-                    if (hasReminder1 && hasReminder2) {
-                        // Both have reminders, compare time respecting sort direction
-                        if (sortAscending) {
-                            t1.reminderTime!!.compareTo(t2.reminderTime!!)
+                        // 2. Scheduled Date (Start of Day)
+                        // Treat 0L as "No Date", effectively infinite future or separate category
+                        val date1 = if (t1.scheduledDate == 0L) Long.MAX_VALUE else getStartOfDay(t1.scheduledDate)
+                        val date2 = if (t2.scheduledDate == 0L) Long.MAX_VALUE else getStartOfDay(t2.scheduledDate)
+                        
+                        val dateResult = if (sortAscending) {
+                            date1.compareTo(date2)
                         } else {
-                            t2.reminderTime!!.compareTo(t1.reminderTime!!)
+                            date2.compareTo(date1)
                         }
-                    } else {
-                        // Neither has reminder, keep stable (or sort by creation?)
-                        // Let's use ID for stability or creation date
-                        t2.createdAt.compareTo(t1.createdAt) // Newest created first within group
+
+                        if (dateResult != 0) {
+                             dateResult 
+                        } else {
+                            // 3. Priority: Task with reminder comes first
+                            val hasReminder1 = t1.reminderTime != null
+                            val hasReminder2 = t2.reminderTime != null
+                            
+                            if (hasReminder1 && !hasReminder2) -1
+                            else if (!hasReminder1 && hasReminder2) 1
+                            else if (hasReminder1 && hasReminder2) {
+                                // Both have reminders, compare time respecting sort direction
+                                if (sortAscending) {
+                                    t1.reminderTime!!.compareTo(t2.reminderTime!!)
+                                } else {
+                                    t2.reminderTime!!.compareTo(t1.reminderTime!!)
+                                }
+                            } else {
+                                // Neither has reminder, keep stable (or sort by creation?)
+                                // Let's use ID for stability or creation date
+                                t2.createdAt.compareTo(t1.createdAt) // Newest created first within group
+                            }
+                        }
                     }
                 }
                 state.tasks.sortedWith(comparator)
@@ -132,6 +170,12 @@ class TaskViewModel(application: Application) : AndroidViewModel(application) {
         }
         state.copy(tasks = sortedTasks, sortAscending = sortAscending)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), TaskUiState())
+
+    fun clearUserMessage() {
+        _userMessage.value = null
+    }
+
+    // ... (rest of methods)
 
     fun setSortOption(option: SortOption) {
         if (_sortOption.value == option) {
@@ -167,6 +211,7 @@ class TaskViewModel(application: Application) : AndroidViewModel(application) {
     fun loadCalendars() {
         viewModelScope.launch {
             _calendars.value = calendarRepository.getWritableCalendars()
+            _allCalendars.value = calendarRepository.getAllCalendars()
             _defaultCalendarId.value = calendarRepository.getDefaultCalendarId()
         }
     }
@@ -175,6 +220,30 @@ class TaskViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             calendarRepository.saveDefaultCalendarId(id)
             _defaultCalendarId.value = id
+        }
+    }
+
+    fun toggleCalendarExclusion(calendarId: Long, excluded: Boolean) {
+        viewModelScope.launch {
+            val current = excludedCalendarIds.value.toMutableSet()
+            if (excluded) {
+                current.add(calendarId.toString())
+            } else {
+                current.remove(calendarId.toString())
+            }
+            preferencesRepository.setExcludedCalendarIds(current)
+        }
+    }
+
+    fun setCalendarExclusionBatch(calendarIds: List<Long>, excluded: Boolean) {
+        viewModelScope.launch {
+            val current = excludedCalendarIds.value.toMutableSet()
+            if (excluded) {
+                current.addAll(calendarIds.map { it.toString() })
+            } else {
+                current.removeAll(calendarIds.map { it.toString() })
+            }
+            preferencesRepository.setExcludedCalendarIds(current)
         }
     }
 
@@ -320,6 +389,210 @@ class TaskViewModel(application: Application) : AndroidViewModel(application) {
                 onSuccess(accountName)
             }
         }
+    }
+
+    fun autoScheduleToday() {
+        viewModelScope.launch {
+            _isLoading.value = true
+            try {
+                // 1. Define Window: Now -> End of Tomorrow (User Feedback: "Multiple items for tomorrow")
+                val now = java.util.Calendar.getInstance()
+                val endOfWindow = java.util.Calendar.getInstance().apply {
+                    add(java.util.Calendar.DAY_OF_YEAR, 1) // Tomorrow
+                    set(java.util.Calendar.HOUR_OF_DAY, 23)
+                    set(java.util.Calendar.MINUTE, 59)
+                }
+
+                // 2. Fetch ALL Calendar Events in Window (Today & Tomorrow)
+                // This is the source of truth for "Busy" slots
+                // Filter by Excluded Calendars
+                val excludedIds = excludedCalendarIds.value
+                var events = calendarRepository.getEventsInRange(now.timeInMillis, endOfWindow.timeInMillis, excludedIds)
+
+                // 3. PULL SYNC: Import new events from Calendar
+                val importedCount = performPullSync(events)
+
+                // 4. PUSH SYNC: Identify Manual Local Changes
+                val manualPushedCount = performPushSync(now.timeInMillis, endOfWindow.timeInMillis)
+                
+                // Re-fetch events if we pushed new ones, to ensure accurate gaps
+                if (manualPushedCount > 0) {
+                     events = calendarRepository.getEventsInRange(now.timeInMillis, endOfWindow.timeInMillis, excludedIds)
+                }
+
+                // 5. AUTO-SCHEDULE: Fill remaining gaps with unscheduled tasks
+                val autoScheduledCount = performAutoSchedule(now.timeInMillis, endOfWindow.timeInMillis, events)
+
+                // 6. Feedback Construction
+                val busyCount = events.size
+                val busySlots = events.map { com.example.aitasklist.scheduler.TimeSlot(it.startTime, it.endTime) }
+                val gaps = calendarGapManager.findGaps(now.timeInMillis, endOfWindow.timeInMillis, busySlots)
+                
+                _userMessage.value = "Events: $busyCount, Gaps: ${gaps.size}. Scheduled: $autoScheduledCount. (Imp: $importedCount, Push: $manualPushedCount)"
+
+            } catch (e: Exception) {
+                 _error.value = "Sync Failed: ${e.message}"
+                 e.printStackTrace()
+            } finally {
+                _isLoading.value = false
+            }
+        }
+    }
+
+    private suspend fun performPullSync(events: List<com.example.aitasklist.data.repository.CalendarEvent>): Int {
+        var count = 0
+        events.forEach { event ->
+            // Try ID Match first
+            var existingTask = try {
+                taskDao.getTaskByCalendarEventId(event.id)
+            } catch (e: Exception) { null }
+
+            // Deduplication (Fuzzy + Unscheduled)
+            if (existingTask == null) {
+                val startOfDay = getStartOfDay(event.startTime)
+                val endOfDay = startOfDay + (24 * 60 * 60 * 1000) - 1
+                
+                // Fuzzy Match: Same Title + Same Day
+                existingTask = try {
+                    taskDao.findTaskByTitleAndDate(event.title, startOfDay, endOfDay)
+                } catch (e: Exception) { null }
+
+                // Unscheduled Match: Same Title + No Date
+                if (existingTask == null) {
+                    existingTask = try {
+                        taskDao.findUnscheduledTaskByTitle(event.title)
+                    } catch (e: Exception) { null }
+                }
+
+                // If Matched, Link & Sync Time
+                if (existingTask != null) {
+                    val updatedTask = existingTask.copy(
+                        calendarEventId = event.id,
+                        scheduledDate = event.startTime,
+                        reminderTime = if (event.isAllDay) null else event.startTime // Sync Reminder to Start Time (Null if AllDay)
+                    )
+                    taskDao.updateTask(updatedTask)
+                    
+                    // Reschedule local reminder
+                    updatedTask.reminderTime?.let {
+                         reminderManager.scheduleReminder(updatedTask.id, updatedTask.content, it, updatedTask.priority.name)
+                    }
+                }
+            } else {
+                // ID Match Exists: Sync Time if changed
+                if (existingTask.scheduledDate != event.startTime || existingTask.reminderTime != event.startTime) {
+                     val updatedTask = existingTask.copy(
+                        scheduledDate = event.startTime,
+                        reminderTime = if (event.isAllDay) null else event.startTime
+                    )
+                    taskDao.updateTask(updatedTask)
+                    updatedTask.reminderTime?.let {
+                        reminderManager.scheduleReminder(updatedTask.id, updatedTask.content, it, updatedTask.priority.name)
+                    }
+                }
+            }
+
+            // Create New if No Match Found
+            if (existingTask == null) {
+                val newTask = Task(
+                    content = event.title,
+                    scheduledDate = event.startTime,
+                    calendarEventId = event.id,
+                    priority = com.example.aitasklist.model.Priority.MEDIUM,
+                    isCompleted = false,
+                    reminderTime = if (event.isAllDay) null else event.startTime // New Task gets Reminder at Event Start (Null if AllDay)
+                )
+                taskDao.insertTasks(listOf(newTask))
+                
+                // Schedule notification
+                newTask.reminderTime?.let {
+                    reminderManager.scheduleReminder(newTask.id, newTask.content, it, newTask.priority.name)
+                }
+                
+                count++
+            }
+        }
+        return count
+    }
+
+    private suspend fun performPushSync(startTime: Long, endTime: Long): Int {
+        val tasksToSync = uiState.value.tasks.filter { 
+            !it.isCompleted && 
+            it.scheduledDate >= startTime && 
+            it.scheduledDate <= endTime &&
+            it.calendarEventId == null
+        }
+
+        if (tasksToSync.isEmpty()) return 0
+
+        var pushedCount = 0
+        val updatedTasks = mutableListOf<Task>()
+        val defaultDuration = com.example.aitasklist.scheduler.AutoScheduler.DEFAULT_TASK_DURATION_MS
+        
+        tasksToSync.forEach { task ->
+            val endParams = task.scheduledDate + defaultDuration
+            val result = calendarRepository.addToCalendar(
+                title = task.content,
+                description = "Synced from AI Task List",
+                startTime = task.scheduledDate,
+                endTime = endParams,
+                calendarId = _defaultCalendarId.value,
+                isAllDay = task.reminderTime == null // All Day if No Reminder Time
+            )
+            if (result != null) {
+                pushedCount++
+                updatedTasks.add(task.copy(calendarEventId = result.first))
+            }
+        }
+        if (updatedTasks.isNotEmpty()) {
+            taskDao.updateTasks(updatedTasks)
+        }
+        return pushedCount
+    }
+
+    private suspend fun performAutoSchedule(windowStart: Long, windowEnd: Long, events: List<com.example.aitasklist.data.repository.CalendarEvent>): Int {
+        val busySlots = events.map { 
+            com.example.aitasklist.scheduler.TimeSlot(it.startTime, it.endTime) 
+        }
+        val gaps = calendarGapManager.findGaps(windowStart, windowEnd, busySlots)
+
+        val unscheduledTasks = uiState.value.tasks.filter { 
+            !it.isCompleted && it.scheduledDate == 0L && it.reminderTime == null 
+        }
+        
+        val todayNormalized = getStartOfDay(windowStart)
+        val scheduledTasks = autoScheduler.scheduleTasks(unscheduledTasks, gaps, todayNormalized)
+        
+        if (scheduledTasks.isNotEmpty()) {
+            val finalTasks = mutableListOf<Task>()
+            scheduledTasks.forEach { task ->
+                val duration = com.example.aitasklist.scheduler.AutoScheduler.DEFAULT_TASK_DURATION_MS
+                val startTime = task.scheduledDate 
+                val endTime = startTime + duration
+                val result = calendarRepository.addToCalendar(
+                    title = task.content,
+                    description = "Auto-Scheduled by AI Task List",
+                    startTime = startTime,
+                    endTime = endTime,
+                    calendarId = _defaultCalendarId.value,
+                    isAllDay = false // Auto-Scheduled always has time
+                )
+
+                val updatedTask = if (result != null) {
+                    task.copy(calendarEventId = result.first) 
+                } else {
+                    task
+                }
+                
+                updatedTask.reminderTime?.let { time ->
+                    reminderManager.scheduleReminder(updatedTask.id, updatedTask.content, time, updatedTask.priority.name)
+                }
+                finalTasks.add(updatedTask)
+            }
+            taskDao.updateTasks(finalTasks)
+            return finalTasks.size
+        }
+        return 0
     }
 
     fun openCalendarEvent(task: Task, onSuccess: (android.net.Uri) -> Unit, onError: () -> Unit) {

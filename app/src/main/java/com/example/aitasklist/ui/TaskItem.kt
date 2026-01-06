@@ -272,23 +272,7 @@ fun TaskItem(
                         tint = if (!showDragHandle) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
                     )
                 }
-                if (task.calendarEventId == null) {
-                    IconButton(onClick = onAddToCalendar, enabled = !showDragHandle) {
-                        Icon(
-                            imageVector = Icons.Default.Add,
-                            contentDescription = stringResource(R.string.add_to_calendar_desc),
-                            tint = if (!showDragHandle) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-                        )
-                    }
-                } else {
-                    IconButton(onClick = onOpenCalendar, enabled = !showDragHandle) {
-                        Icon(
-                            imageVector = Icons.Default.Edit,
-                            contentDescription = stringResource(R.string.view_in_calendar_desc),
-                            tint = if (!showDragHandle) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-                        )
-                    }
-                }
+
             }
         }
     }
