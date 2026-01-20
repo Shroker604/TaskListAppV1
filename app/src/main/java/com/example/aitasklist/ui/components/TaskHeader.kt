@@ -28,6 +28,7 @@ fun TaskHeader(
     onOpenCalendarDialog: () -> Unit,
     onOpenFilterDialog: () -> Unit,
     onAutoSchedule: () -> Unit,
+    onOpenRestoreDialog: () -> Unit,
     isDailyPlanner: Boolean = false,
     onToggleDailyPlanner: () -> Unit = {}
 ) {
@@ -159,6 +160,19 @@ fun TaskHeader(
                                 Icon(
                                     Icons.Default.Settings,
                                     contentDescription = "Sync Settings"
+                                )
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Restore Deleted") },
+                            onClick = {
+                                onOpenRestoreDialog()
+                                showMenu = false
+                            },
+                            leadingIcon = {
+                                Icon(
+                                    Icons.Default.Refresh,
+                                    contentDescription = "Restore Deleted"
                                 )
                             }
                         )

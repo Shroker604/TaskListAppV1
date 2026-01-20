@@ -39,6 +39,7 @@ fun TaskListScreen(
     var textInput by remember { mutableStateOf("") }
     var showCalendarDialog by remember { mutableStateOf(false) }
     var showFilterDialog by remember { mutableStateOf(false) }
+    var showRestoreDialog by remember { mutableStateOf(false) }
     val context = LocalContext.current
 
     LaunchedEffect(Unit) {
@@ -234,6 +235,7 @@ fun TaskListScreen(
                     ))
                 }
             },
+            onOpenRestoreDialog = { showRestoreDialog = true },
             isDailyPlanner = isDailyPlanner,
             onToggleDailyPlanner = { viewModel.setDailyPlanner(!isDailyPlanner) }
         )
@@ -255,6 +257,15 @@ fun TaskListScreen(
                 onToggleExclusion = { id, excluded -> viewModel.toggleCalendarExclusion(id, excluded) },
                 onToggleGroupExclusion = { ids, excluded -> viewModel.setCalendarExclusionBatch(ids, excluded) },
                 onDismiss = { showFilterDialog = false }
+            )
+        }
+        
+        if (showRestoreDialog) {
+            RestoreTasksDialog(
+                deletedTasks = uiState.deletedTasks,
+                onRestoreTask = { viewModel.restoreTask(it) },
+                onHardDeleteTask = { viewModel.hardDeleteTask(it) },
+                onDismiss = { showRestoreDialog = false }
             )
         }
         

@@ -188,8 +188,8 @@ class CalendarRepository(private val context: Context) {
             CalendarContract.Calendars.CALENDAR_DISPLAY_NAME,
             CalendarContract.Calendars.ACCOUNT_NAME
         )
-        // No Access Level Filter - Just Visible
-        val selection = "${CalendarContract.Calendars.VISIBLE} = 1"
+        // Stricter Filter: Visible AND Synced
+        val selection = "${CalendarContract.Calendars.VISIBLE} = 1 AND ${CalendarContract.Calendars.SYNC_EVENTS} = 1"
 
         try {
             context.contentResolver.query(
@@ -240,7 +240,8 @@ class CalendarRepository(private val context: Context) {
             CalendarContract.Instances.BEGIN,
             CalendarContract.Instances.END,
             CalendarContract.Instances.CALENDAR_ID,
-            CalendarContract.Events.ALL_DAY // Added to reading projection
+            CalendarContract.Events.ALL_DAY,
+            CalendarContract.Events.RRULE // Fetch Recurrence Rule
         )
         
         val sortOrder = "${CalendarContract.Instances.BEGIN} ASC"
@@ -259,17 +260,26 @@ class CalendarRepository(private val context: Context) {
                 val endCol = cursor.getColumnIndex(CalendarContract.Instances.END)
                 val calIdCol = cursor.getColumnIndex(CalendarContract.Instances.CALENDAR_ID)
                 val allDayCol = cursor.getColumnIndex(CalendarContract.Events.ALL_DAY)
+                val rruleCol = cursor.getColumnIndex(CalendarContract.Events.RRULE)
 
-                while (cursor.moveToNext()) {
+                // 1. Fetch Visible Calendar IDs to enforce "App Visibility" (Google Calendar App Toggle)
+                val visibleCalendarIds = getAllCalendars().map { it.id }.toSet()
+
+                 while (cursor.moveToNext()) {
                     val id = cursor.getLong(idCol)
                     val title = cursor.getString(titleCol) ?: "No Title"
                     val startTime = cursor.getLong(startCol)
                     val endTime = cursor.getLong(endCol)
                     val calendarId = cursor.getLong(calIdCol)
                     val isAllDay = if (allDayCol != -1) cursor.getInt(allDayCol) == 1 else false
+                    
+                    // Determine Recurrence
+                    val rrule = if (rruleCol != -1) cursor.getString(rruleCol) else null
+                    val isRecurring = !rrule.isNullOrEmpty()
 
-                    if (!excludedCalendarIds.contains(calendarId.toString())) {
-                         events.add(CalendarEvent(id, title, startTime, endTime, isAllDay))
+                    // Filter: Must be VISIBLE in Android AND NOT Excluded in App Settings
+                    if (visibleCalendarIds.contains(calendarId) && !excludedCalendarIds.contains(calendarId.toString())) {
+                         events.add(CalendarEvent(id, title, startTime, endTime, isAllDay, isRecurring))
                     }
                 }
             }
@@ -281,4 +291,4 @@ class CalendarRepository(private val context: Context) {
 }
 
 data class CalendarInfo(val id: Long, val displayName: String, val accountName: String)
-data class CalendarEvent(val id: Long, val title: String, val startTime: Long, val endTime: Long, val isAllDay: Boolean)
+data class CalendarEvent(val id: Long, val title: String, val startTime: Long, val endTime: Long, val isAllDay: Boolean, val isRecurring: Boolean = false)

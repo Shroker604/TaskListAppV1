@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 import com.example.aitasklist.model.Task
@@ -24,6 +25,7 @@ enum class SortOption {
 
 data class TaskUiState(
     val tasks: List<Task> = emptyList(),
+    val deletedTasks: List<Task> = emptyList(), // Added for Restore UI
     val isLoading: Boolean = false,
     val error: String? = null,
     val calendars: List<CalendarInfo> = emptyList(), // Writable for Default
@@ -52,6 +54,12 @@ class TaskViewModel(application: Application) : AndroidViewModel(application) {
     private val _defaultCalendarId = MutableStateFlow<Long?>(null)
     private val _sortOption = MutableStateFlow(SortOption.DATE_REMINDER)
     private val _sortAscending = MutableStateFlow(false)
+
+    init {
+        loadCalendars()
+        // Auto-Prune old soft-deleted tasks (older than 30 days)
+        pruneOldTasks()
+    }
 
     val isDarkTheme = preferencesRepository.isDarkTheme.stateIn(
         scope = viewModelScope,
@@ -85,18 +93,21 @@ class TaskViewModel(application: Application) : AndroidViewModel(application) {
 
     val uiState: StateFlow<TaskUiState> = combine(
         taskDao.getAllTasks(),
+        taskDao.getDeletedTasks(),
         _isLoading,
         _error,
-        _calendars,
-        _allCalendars
-    ) { tasks, isLoading, error, calendars, allCalendars ->
+        _calendars
+        // _allCalendars moved to next combine
+    ) { tasks, deletedTasks, isLoading, error, calendars ->
         TaskUiState(
-            tasks = tasks, 
+            tasks = tasks,
+            deletedTasks = deletedTasks,
             isLoading = isLoading, 
             error = error, 
-            calendars = calendars, 
-            allCalendars = allCalendars
+            calendars = calendars
         )
+    }.combine(_allCalendars) { state, allCalendars ->
+        state.copy(allCalendars = allCalendars)
     }.combine(_defaultCalendarId) { state, defaultId ->
         state.copy(defaultCalendarId = defaultId)
     }.combine(_userMessage) { state, userMessage ->
@@ -333,12 +344,22 @@ class TaskViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             val completedTasks = uiState.value.tasks.filter { it.isCompleted }
             completedTasks.forEach { task ->
+                // If it's a synced task, Soft Delete it (Hide & Prevent Resync)
                 if (task.calendarEventId != null) {
-                    calendarRepository.deleteCalendarEvent(task.calendarEventId)
+                    taskDao.updateTask(task.copy(isDeleted = true))
+                    // Do NOT delete from Calendar (User request: "Prevent Resync", implies keeping on cal but ignoring locally)
+                } else {
+                    // Local task -> Hard Delete
+                    taskDao.deleteTask(task)
                 }
                 reminderManager.cancelReminder(task.id)
             }
-            taskDao.deleteCompletedTasks()
+            // For batch local delete (if any remain that were hard deleted above, though doing one by one is safer for mixed list)
+            // simplify: Filter local only for batch? Or just iterate.
+            // Iteration above covers it.
+            // taskDao.deleteCompletedTasks() // This would hard delete everything. We must avoid calling this if we soft deleting some.
+            // Alternative: Call deleteCompletedTasks() ONLY for unsynced?
+            // Let's rely on the loop above for safety.
         }
     }
 
@@ -347,9 +368,33 @@ class TaskViewModel(application: Application) : AndroidViewModel(application) {
             val task = uiState.value.tasks.find { it.id == taskId }
             task?.let {
                 if (it.calendarEventId != null) {
-                    calendarRepository.deleteCalendarEvent(it.calendarEventId)
+                    // Synced Task -> Soft Delete
+                    taskDao.updateTask(it.copy(isDeleted = true))
+                } else {
+                    // Local Task -> Hard Delete
+                    if (it.calendarEventId != null) {
+                        calendarRepository.deleteCalendarEvent(it.calendarEventId)
+                    }
+                    taskDao.deleteTask(it)
                 }
                 reminderManager.cancelReminder(it.id)
+            }
+        }
+    }
+
+    fun restoreTask(taskId: String) {
+        viewModelScope.launch {
+            val task = uiState.value.deletedTasks.find { it.id == taskId }
+            task?.let {
+                 taskDao.updateTask(it.copy(isDeleted = false))
+            }
+        }
+    }
+
+    fun hardDeleteTask(taskId: String) {
+        viewModelScope.launch {
+            val task = uiState.value.deletedTasks.find { it.id == taskId } ?: uiState.value.tasks.find { it.id == taskId }
+            task?.let {
                 taskDao.deleteTask(it)
             }
         }
@@ -360,11 +405,14 @@ class TaskViewModel(application: Application) : AndroidViewModel(application) {
             val allTasks = uiState.value.tasks
             allTasks.forEach { task ->
                 if (task.calendarEventId != null) {
-                    calendarRepository.deleteCalendarEvent(task.calendarEventId)
+                    // Soft Delete
+                    taskDao.updateTask(task.copy(isDeleted = true))
+                } else {
+                    // Hard Delete
+                    taskDao.deleteTask(task)
                 }
                 reminderManager.cancelReminder(task.id)
             }
-            taskDao.deleteAllTasks()
         }
     }
 
@@ -388,6 +436,13 @@ class TaskViewModel(application: Application) : AndroidViewModel(application) {
                 taskDao.updateTask(task.copy(calendarEventId = eventId))
                 onSuccess(accountName)
             }
+        }
+    }
+
+    private fun pruneOldTasks() {
+        viewModelScope.launch {
+            val thirtyDaysAgo = System.currentTimeMillis() - (30L * 24 * 60 * 60 * 1000)
+            taskDao.deleteSoftDeletedOlderThan(thirtyDaysAgo)
         }
     }
 
@@ -467,10 +522,15 @@ class TaskViewModel(application: Application) : AndroidViewModel(application) {
     private suspend fun performPullSync(events: List<com.example.aitasklist.data.repository.CalendarEvent>): Int {
         var count = 0
         events.forEach { event ->
-            // Try ID Match first
+            // Try ID Match first (Checking BOTH Active and Deleted)
             var existingTask = try {
-                taskDao.getTaskByCalendarEventId(event.id)
+                taskDao.getTaskByCalendarEventIdIncludingDeleted(event.id)
             } catch (e: Exception) { null }
+
+            // If Soft Deleted, SKIP (Prevent Resync)
+            if (existingTask != null && existingTask.isDeleted) {
+                return@forEach
+            }
 
             // Deduplication (Fuzzy + Unscheduled)
             if (existingTask == null) {
@@ -494,7 +554,8 @@ class TaskViewModel(application: Application) : AndroidViewModel(application) {
                     val updatedTask = existingTask.copy(
                         calendarEventId = event.id,
                         scheduledDate = event.startTime,
-                        reminderTime = if (event.isAllDay) null else event.startTime // Sync Reminder to Start Time (Null if AllDay)
+                        reminderTime = if (event.isAllDay) null else event.startTime, // Sync Reminder to Start Time (Null if AllDay)
+                        isRecurring = event.isRecurring
                     )
                     taskDao.updateTask(updatedTask)
                     
@@ -504,11 +565,15 @@ class TaskViewModel(application: Application) : AndroidViewModel(application) {
                     }
                 }
             } else {
-                // ID Match Exists: Sync Time if changed
-                if (existingTask.scheduledDate != event.startTime || existingTask.reminderTime != event.startTime) {
+                // ID Match Exists (And is Active): Sync Time if changed
+                if (existingTask.scheduledDate != event.startTime || 
+                    existingTask.reminderTime != (if (event.isAllDay) null else event.startTime) ||
+                    existingTask.isRecurring != event.isRecurring) {
+                    
                      val updatedTask = existingTask.copy(
                         scheduledDate = event.startTime,
-                        reminderTime = if (event.isAllDay) null else event.startTime
+                        reminderTime = if (event.isAllDay) null else event.startTime,
+                        isRecurring = event.isRecurring
                     )
                     taskDao.updateTask(updatedTask)
                     updatedTask.reminderTime?.let {
@@ -525,7 +590,8 @@ class TaskViewModel(application: Application) : AndroidViewModel(application) {
                     calendarEventId = event.id,
                     priority = com.example.aitasklist.model.Priority.MEDIUM,
                     isCompleted = false,
-                    reminderTime = if (event.isAllDay) null else event.startTime // New Task gets Reminder at Event Start (Null if AllDay)
+                    reminderTime = if (event.isAllDay) null else event.startTime, // New Task gets Reminder at Event Start (Null if AllDay)
+                    isRecurring = event.isRecurring
                 )
                 taskDao.insertTasks(listOf(newTask))
                 

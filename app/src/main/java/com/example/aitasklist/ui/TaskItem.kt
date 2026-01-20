@@ -11,6 +11,7 @@ import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.detectTapGestures
 
@@ -261,6 +262,16 @@ fun TaskItem(
                                 text = timeFormat.format(Date(task.reminderTime)),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.secondary
+                            )
+                        }
+                        
+                        if (task.isRecurring) {
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Icon(
+                                imageVector = Icons.Default.Refresh,
+                                contentDescription = "Recurring",
+                                modifier = Modifier.size(12.dp),
+                                tint = MaterialTheme.colorScheme.secondary
                             )
                         }
                     }
