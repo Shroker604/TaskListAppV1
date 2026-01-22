@@ -22,7 +22,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.aitasklist.R
-import com.example.aitasklist.SortOption
+import com.example.aitasklist.domain.SortOption
 import com.example.aitasklist.TaskViewModel
 import com.example.aitasklist.model.Task
 import com.example.aitasklist.ui.components.TaskHeader

@@ -12,7 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.example.aitasklist.R
-import com.example.aitasklist.SortOption
+import com.example.aitasklist.domain.SortOption
 import com.example.aitasklist.model.Task
 
 @Composable

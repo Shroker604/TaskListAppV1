@@ -17,11 +17,9 @@ import com.example.aitasklist.data.repository.CalendarRepository
 import com.example.aitasklist.data.repository.CalendarInfo
 import com.example.aitasklist.data.UserPreferencesRepository
 
-enum class SortOption {
-    CREATION_DATE, // Default: Newest first
-    DATE_REMINDER,  // Scheduled Date -> Reminder Time
-    CUSTOM         // User defined order
-}
+import com.example.aitasklist.domain.SortOption
+import com.example.aitasklist.domain.TaskSorter
+import com.example.aitasklist.util.DateUtils
 
 data class TaskUiState(
     val tasks: List<Task> = emptyList(),
@@ -115,70 +113,7 @@ class TaskViewModel(application: Application) : AndroidViewModel(application) {
     }.combine(_sortOption) { state, sortOption -> state.copy(sortOption = sortOption) 
     }.combine(excludedCalendarIds) { state, excluded -> state.copy(excludedCalendarIds = excluded) }
     .combine(_sortAscending) { state, sortAscending ->
-        val sortedTasks = when (state.sortOption) {
-            SortOption.CREATION_DATE -> {
-                val comparator = Comparator<Task> { t1, t2 ->
-                    // 1. Completion Status (Active first)
-                    if (t1.isCompleted != t2.isCompleted) {
-                        if (t1.isCompleted) 1 else -1
-                    } else {
-                        // 2. Creation Date
-                        if (sortAscending) {
-                            t1.createdAt.compareTo(t2.createdAt)
-                        } else {
-                            t2.createdAt.compareTo(t1.createdAt)
-                        }
-                    }
-                }
-                state.tasks.sortedWith(comparator)
-            }
-            SortOption.DATE_REMINDER -> {
-                val comparator = Comparator<Task> { t1, t2 ->
-                    // 1. Completion Status (Active first)
-                    if (t1.isCompleted != t2.isCompleted) {
-                        if (t1.isCompleted) 1 else -1
-                    } else {
-                        // 2. Scheduled Date (Start of Day)
-                        // Treat 0L as "No Date", effectively infinite future or separate category
-                        val date1 = if (t1.scheduledDate == 0L) Long.MAX_VALUE else getStartOfDay(t1.scheduledDate)
-                        val date2 = if (t2.scheduledDate == 0L) Long.MAX_VALUE else getStartOfDay(t2.scheduledDate)
-                        
-                        val dateResult = if (sortAscending) {
-                            date1.compareTo(date2)
-                        } else {
-                            date2.compareTo(date1)
-                        }
-
-                        if (dateResult != 0) {
-                             dateResult 
-                        } else {
-                            // 3. Priority: Task with reminder comes first
-                            val hasReminder1 = t1.reminderTime != null
-                            val hasReminder2 = t2.reminderTime != null
-                            
-                            if (hasReminder1 && !hasReminder2) -1
-                            else if (!hasReminder1 && hasReminder2) 1
-                            else if (hasReminder1 && hasReminder2) {
-                                // Both have reminders, compare time respecting sort direction
-                                if (sortAscending) {
-                                    t1.reminderTime!!.compareTo(t2.reminderTime!!)
-                                } else {
-                                    t2.reminderTime!!.compareTo(t1.reminderTime!!)
-                                }
-                            } else {
-                                // Neither has reminder, keep stable (or sort by creation?)
-                                // Let's use ID for stability or creation date
-                                t2.createdAt.compareTo(t1.createdAt) // Newest created first within group
-                            }
-                        }
-                    }
-                }
-                state.tasks.sortedWith(comparator)
-            }
-            SortOption.CUSTOM -> {
-                state.tasks.sortedBy { it.orderIndex }
-            }
-        }
+        val sortedTasks = TaskSorter.sortTasks(state.tasks, state.sortOption, sortAscending)
         state.copy(tasks = sortedTasks, sortAscending = sortAscending)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), TaskUiState())
 
@@ -195,16 +130,6 @@ class TaskViewModel(application: Application) : AndroidViewModel(application) {
             _sortOption.value = option
             _sortAscending.value = false // Default to descending when switching
         }
-    }
-
-    private fun getStartOfDay(millis: Long): Long {
-        val calendar = java.util.Calendar.getInstance()
-        calendar.timeInMillis = millis
-        calendar.set(java.util.Calendar.HOUR_OF_DAY, 0)
-        calendar.set(java.util.Calendar.MINUTE, 0)
-        calendar.set(java.util.Calendar.SECOND, 0)
-        calendar.set(java.util.Calendar.MILLISECOND, 0)
-        return calendar.timeInMillis
     }
 
     fun updateAllTasksOrder(tasks: List<Task>) {
@@ -522,88 +447,90 @@ class TaskViewModel(application: Application) : AndroidViewModel(application) {
     private suspend fun performPullSync(events: List<com.example.aitasklist.data.repository.CalendarEvent>): Int {
         var count = 0
         events.forEach { event ->
-            // Try ID Match first (Checking BOTH Active and Deleted)
-            var existingTask = try {
-                taskDao.getTaskByCalendarEventIdIncludingDeleted(event.id)
-            } catch (e: Exception) { null }
-
+            val existingTask = findMatchingTask(event)
+            
             // If Soft Deleted, SKIP (Prevent Resync)
             if (existingTask != null && existingTask.isDeleted) {
                 return@forEach
             }
 
-            // Deduplication (Fuzzy + Unscheduled)
-            if (existingTask == null) {
-                val startOfDay = getStartOfDay(event.startTime)
-                val endOfDay = startOfDay + (24 * 60 * 60 * 1000) - 1
-                
-                // Fuzzy Match: Same Title + Same Day
-                existingTask = try {
-                    taskDao.findTaskByTitleAndDate(event.title, startOfDay, endOfDay)
-                } catch (e: Exception) { null }
-
-                // Unscheduled Match: Same Title + No Date
-                if (existingTask == null) {
-                    existingTask = try {
-                        taskDao.findUnscheduledTaskByTitle(event.title)
-                    } catch (e: Exception) { null }
-                }
-
-                // If Matched, Link & Sync Time
-                if (existingTask != null) {
-                    val updatedTask = existingTask.copy(
-                        calendarEventId = event.id,
-                        scheduledDate = event.startTime,
-                        reminderTime = if (event.isAllDay) null else event.startTime, // Sync Reminder to Start Time (Null if AllDay)
-                        isRecurring = event.isRecurring
-                    )
-                    taskDao.updateTask(updatedTask)
-                    
-                    // Reschedule local reminder
-                    updatedTask.reminderTime?.let {
-                         reminderManager.scheduleReminder(updatedTask.id, updatedTask.content, it, updatedTask.priority.name)
-                    }
+            if (existingTask != null) {
+                // Check if update needed
+                if (shouldUpdateTask(existingTask, event)) {
+                    updateTaskFromEvent(existingTask, event)
                 }
             } else {
-                // ID Match Exists (And is Active): Sync Time if changed
-                if (existingTask.scheduledDate != event.startTime || 
-                    existingTask.reminderTime != (if (event.isAllDay) null else event.startTime) ||
-                    existingTask.isRecurring != event.isRecurring) {
-                    
-                     val updatedTask = existingTask.copy(
-                        scheduledDate = event.startTime,
-                        reminderTime = if (event.isAllDay) null else event.startTime,
-                        isRecurring = event.isRecurring
-                    )
-                    taskDao.updateTask(updatedTask)
-                    updatedTask.reminderTime?.let {
-                        reminderManager.scheduleReminder(updatedTask.id, updatedTask.content, it, updatedTask.priority.name)
-                    }
-                }
-            }
-
-            // Create New if No Match Found
-            if (existingTask == null) {
-                val newTask = Task(
-                    content = event.title,
-                    scheduledDate = event.startTime,
-                    calendarEventId = event.id,
-                    priority = com.example.aitasklist.model.Priority.MEDIUM,
-                    isCompleted = false,
-                    reminderTime = if (event.isAllDay) null else event.startTime, // New Task gets Reminder at Event Start (Null if AllDay)
-                    isRecurring = event.isRecurring
-                )
-                taskDao.insertTasks(listOf(newTask))
-                
-                // Schedule notification
-                newTask.reminderTime?.let {
-                    reminderManager.scheduleReminder(newTask.id, newTask.content, it, newTask.priority.name)
-                }
-                
+                createNewTaskFromEvent(event)
                 count++
             }
         }
         return count
+    }
+
+    private suspend fun findMatchingTask(event: com.example.aitasklist.data.repository.CalendarEvent): Task? {
+        // 1. Try ID Match
+        try {
+            val task = taskDao.getTaskByCalendarEventIdIncludingDeleted(event.id)
+            if (task != null) return task
+        } catch (e: Exception) { /* ignore */ }
+
+        // 2. Fuzzy Match: Same Title + Same Day
+        val startOfDay = DateUtils.getStartOfDay(event.startTime)
+        val endOfDay = startOfDay + (24 * 60 * 60 * 1000) - 1
+        try {
+            val task = taskDao.findTaskByTitleAndDate(event.title, startOfDay, endOfDay)
+            if (task != null) return task
+        } catch (e: Exception) { /* ignore */ }
+
+        // 3. Unscheduled Match: Same Title + No Date
+        try {
+            val task = taskDao.findUnscheduledTaskByTitle(event.title)
+            if (task != null) return task
+        } catch (e: Exception) { /* ignore */ }
+
+        return null
+    }
+
+    private fun shouldUpdateTask(task: Task, event: com.example.aitasklist.data.repository.CalendarEvent): Boolean {
+        // If not linked yet, we should update (link it)
+        if (task.calendarEventId != event.id) return true
+        
+        // If linked, check for changes
+        // Note: We sync reminder time if it differs from event start (unless all day)
+        val expectedReminderData = if (event.isAllDay) null else event.startTime
+        
+        return task.scheduledDate != event.startTime ||
+               task.reminderTime != expectedReminderData ||
+               task.isRecurring != event.isRecurring
+    }
+
+    private suspend fun updateTaskFromEvent(task: Task, event: com.example.aitasklist.data.repository.CalendarEvent) {
+        val updatedTask = task.copy(
+            calendarEventId = event.id,
+            scheduledDate = event.startTime,
+            reminderTime = if (event.isAllDay) null else event.startTime,
+            isRecurring = event.isRecurring
+        )
+        taskDao.updateTask(updatedTask)
+        updatedTask.reminderTime?.let {
+            reminderManager.scheduleReminder(updatedTask.id, updatedTask.content, it, updatedTask.priority.name)
+        }
+    }
+
+    private suspend fun createNewTaskFromEvent(event: com.example.aitasklist.data.repository.CalendarEvent) {
+        val newTask = Task(
+            content = event.title,
+            scheduledDate = event.startTime,
+            calendarEventId = event.id,
+            priority = com.example.aitasklist.model.Priority.MEDIUM,
+            isCompleted = false,
+            reminderTime = if (event.isAllDay) null else event.startTime,
+            isRecurring = event.isRecurring
+        )
+        taskDao.insertTasks(listOf(newTask))
+        newTask.reminderTime?.let {
+            reminderManager.scheduleReminder(newTask.id, newTask.content, it, newTask.priority.name)
+        }
     }
 
     private suspend fun performPushSync(startTime: Long, endTime: Long): Int {
@@ -651,7 +578,7 @@ class TaskViewModel(application: Application) : AndroidViewModel(application) {
             !it.isCompleted && it.scheduledDate == 0L && it.reminderTime == null 
         }
         
-        val todayNormalized = getStartOfDay(windowStart)
+        val todayNormalized = DateUtils.getStartOfDay(windowStart)
         val scheduledTasks = autoScheduler.scheduleTasks(unscheduledTasks, gaps, todayNormalized)
         
         if (scheduledTasks.isNotEmpty()) {
