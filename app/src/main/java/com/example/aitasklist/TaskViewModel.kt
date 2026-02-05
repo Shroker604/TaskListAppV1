@@ -18,7 +18,7 @@ import com.example.aitasklist.data.repository.CalendarInfo
 import com.example.aitasklist.data.UserPreferencesRepository
 
 import com.example.aitasklist.domain.SortOption
-import com.example.aitasklist.domain.TaskSorter
+import com.example.aitasklist.domain.SortStrategyRegistry
 import com.example.aitasklist.util.DateUtils
 
 data class TaskUiState(
@@ -112,8 +112,9 @@ class TaskViewModel(application: Application) : AndroidViewModel(application) {
         state.copy(userMessage = userMessage)
     }.combine(_sortOption) { state, sortOption -> state.copy(sortOption = sortOption) 
     }.combine(excludedCalendarIds) { state, excluded -> state.copy(excludedCalendarIds = excluded) }
-    .combine(_sortAscending) { state, sortAscending ->
-        val sortedTasks = TaskSorter.sortTasks(state.tasks, state.sortOption, sortAscending)
+    }.combine(_sortAscending) { state, sortAscending ->
+        val strategy = SortStrategyRegistry().getStrategy(state.sortOption)
+        val sortedTasks = strategy.sort(state.tasks, sortAscending)
         state.copy(tasks = sortedTasks, sortAscending = sortAscending)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), TaskUiState())
 
