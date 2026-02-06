@@ -1,7 +1,7 @@
 package com.example.aitasklist.di
 
 import android.content.Context
-import com.example.aitasklist.data.remote.CloudGeminiRepository
+
 import com.example.aitasklist.data.local.OnDeviceGeminiRepository
 import com.example.aitasklist.data.repository.CalendarRepository
 import com.example.aitasklist.data.local.AppDatabase

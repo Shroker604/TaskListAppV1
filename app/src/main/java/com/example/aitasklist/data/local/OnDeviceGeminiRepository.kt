@@ -3,7 +3,7 @@ package com.example.aitasklist.data.local
 import android.content.Context
 import android.util.Log
 import com.example.aitasklist.data.remote.TaskGeneratorRepository
-import com.example.aitasklist.data.remote.CloudGeminiRepository
+
 import com.google.mlkit.genai.prompt.GenerativeModel
 import com.google.mlkit.genai.prompt.Generation
 import com.google.mlkit.genai.prompt.GenerationConfig
