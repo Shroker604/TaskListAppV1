@@ -23,33 +23,26 @@ class HourlySummaryWorker(
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         try {
-            val database = AppDatabase.getInstance(applicationContext)
+            // Use ServiceLocator
+            val briefingManager = com.example.aitasklist.di.ServiceLocator.briefingManager
+            val database = com.example.aitasklist.di.ServiceLocator.getInstance(applicationContext)
             val taskDao = database.taskDao()
 
+            if (briefingManager == null) {
+                 // Fallback if ServiceLocator not ready (unlikely)
+                 return@withContext Result.failure()
+            }
+
             val now = System.currentTimeMillis()
-            val oneHourLater = now + 3600000 // 1 Hour
-            val endOfDay = DateUtils.getStartOfDay(now) + (24 * 60 * 60 * 1000) - 1
-
-            // 1. Fetch Next Hour Tasks (Critical)
-            val nextHourTasks = taskDao.getTasksInRange(now, oneHourLater)
-
-            // 2. Fetch Rest of Day Tasks
-            // Overlap check: range is now -> endOfDay. Filter out those in nextHourTasks manually or adjust query?
-            // Let's adjust query start time to avoid dupes?
-            // Actually, querying (oneHourLater, endOfDay) is safer.
-            val restOfDayTasks = taskDao.getTasksInRange(oneHourLater + 1, endOfDay)
-
-            // Criteria for Notification:
-            // - Has tasks in next hour? -> YES
-            // - OR Has > 3 tasks for rest of day? -> Maybe?
-            // Let's stick to user request: "Every hour to provide a summary"
-            // If there are NO tasks at all, maybe skip? But user said "Every hour".
-            // Let's be smart: If literally nothing is due today, maybe silent?
-            // But "Unscheduled" tasks exist. 
-            // Let's notify if ANY tasks exist in "Next Hour" OR "Rest of Day".
             
-            if (nextHourTasks.isNotEmpty() || restOfDayTasks.isNotEmpty()) {
-                sendNotification(nextHourTasks.size, restOfDayTasks.size)
+            // Use BriefingManager logic
+            val briefing = briefingManager.getBriefingFromDao(now, taskDao)
+
+            val nextHourCount = briefing.nextHourTasks.size
+            val restOfDayCount = briefing.restOfDayTasks.size
+            
+            if (nextHourCount > 0 || restOfDayCount > 0) {
+                sendNotification(nextHourCount, restOfDayCount)
             }
 
             Result.success()

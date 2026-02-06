@@ -9,7 +9,10 @@ class TaskApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
-        database = AppDatabase.getInstance(this)
+        // Initialize ServiceLocator
+        com.example.aitasklist.di.ServiceLocator.initialize(this)
+        
+        database = com.example.aitasklist.di.ServiceLocator.getInstance(this)
         
         // Schedule Hourly Summary
         val workRequest = androidx.work.PeriodicWorkRequestBuilder<com.example.aitasklist.scheduler.HourlySummaryWorker>(
