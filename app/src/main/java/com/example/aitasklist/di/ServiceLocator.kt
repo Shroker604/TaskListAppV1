@@ -1,7 +1,8 @@
 package com.example.aitasklist.di
 
 import android.content.Context
-import com.example.aitasklist.data.remote.GeminiRepository
+import com.example.aitasklist.data.remote.CloudGeminiRepository
+import com.example.aitasklist.data.local.OnDeviceGeminiRepository
 import com.example.aitasklist.data.repository.CalendarRepository
 import com.example.aitasklist.data.local.AppDatabase
 import com.example.aitasklist.scheduler.ReminderManager
@@ -22,7 +23,7 @@ object ServiceLocator {
         private set
 
     @Volatile
-    var geminiRepository: GeminiRepository? = null
+    var geminiRepository: com.example.aitasklist.data.remote.TaskGeneratorRepository? = null
         private set
         
     @Volatile
@@ -57,7 +58,8 @@ object ServiceLocator {
         val app = context.applicationContext
         database = AppDatabase.getInstance(app)
         calendarRepository = CalendarRepository(app)
-        geminiRepository = GeminiRepository()
+        // Initialize On-Device Repository by default (or based on flag in future)
+        geminiRepository = OnDeviceGeminiRepository(app)
         reminderManager = ReminderManager(app)
         userPreferencesRepository = UserPreferencesRepository(app)
         

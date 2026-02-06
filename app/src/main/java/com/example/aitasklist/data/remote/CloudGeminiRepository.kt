@@ -1,13 +1,12 @@
 package com.example.aitasklist.data.remote
 
 import com.google.ai.client.generativeai.GenerativeModel
-import com.google.ai.client.generativeai.type.content
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import com.example.aitasklist.BuildConfig
 
-class GeminiRepository {
+class CloudGeminiRepository : TaskGeneratorRepository {
     // Use the API Key from BuildConfig
     private val apiKey = BuildConfig.GEMINI_API_KEY
 
@@ -16,7 +15,7 @@ class GeminiRepository {
         apiKey = apiKey
     )
 
-    suspend fun parseTasks(input: String, splitTasks: Boolean): List<String> = withContext(Dispatchers.IO) {
+    override suspend fun parseTasks(input: String, splitTasks: Boolean): List<String> = withContext(Dispatchers.IO) {
         try {
             val groupingInstruction = if (splitTasks) {
                 "3. Split the input into individual tasks. Do NOT group related items. For example, 'Buy apples, potatoes and milk' should be THREE tasks: 'Buy apples', 'Buy potatoes', 'Buy milk'."

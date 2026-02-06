@@ -184,6 +184,7 @@ class TaskViewModel(application: Application) : AndroidViewModel(application) {
             _isLoading.value = true
             _error.value = null
             try {
+                // Now using TaskGeneratorRepository definition (interface)
                 val taskStrings = repository.parseTasks(input, splitTasks)
                 val newTasks = taskStrings.map { Task(content = it) }
                 taskDao.insertTasks(newTasks)
