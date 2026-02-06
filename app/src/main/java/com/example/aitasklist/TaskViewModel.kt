@@ -112,7 +112,7 @@ class TaskViewModel(application: Application) : AndroidViewModel(application) {
         state.copy(userMessage = userMessage)
     }.combine(_sortOption) { state, sortOption -> state.copy(sortOption = sortOption) 
     }.combine(excludedCalendarIds) { state, excluded -> state.copy(excludedCalendarIds = excluded) }
-    }.combine(_sortAscending) { state, sortAscending ->
+    .combine(_sortAscending) { state, sortAscending ->
         val strategy = SortStrategyRegistry().getStrategy(state.sortOption)
         val sortedTasks = strategy.sort(state.tasks, sortAscending)
         state.copy(tasks = sortedTasks, sortAscending = sortAscending)
@@ -630,4 +630,35 @@ class TaskViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
     }
+
+    fun getHourlyBriefing(now: Long): HourlyBriefing {
+        val allTasks = uiState.value.tasks.filter { !it.isCompleted && !it.isDeleted }
+        val oneHourLater = now + 3600000
+        val endOfDay = DateUtils.getEndOfDay(now)
+
+        val overdue = allTasks.filter {
+            it.scheduledDate > 0L && it.scheduledDate < now
+        }.sortedBy { it.scheduledDate }
+
+        val nextHour = allTasks.filter { 
+            it.scheduledDate in now..oneHourLater 
+        }.sortedBy { it.scheduledDate }
+
+        val restOfDay = allTasks.filter { 
+            it.scheduledDate > oneHourLater && it.scheduledDate <= endOfDay
+        }.sortedBy { it.scheduledDate }
+
+        val unscheduled = allTasks.filter { 
+            it.scheduledDate == 0L 
+        }
+
+        return HourlyBriefing(overdue, nextHour, restOfDay, unscheduled)
+    }
 }
+
+data class HourlyBriefing(
+    val overdueTasks: List<Task>,
+    val nextHourTasks: List<Task>,
+    val restOfDayTasks: List<Task>,
+    val unscheduledTasks: List<Task>
+)

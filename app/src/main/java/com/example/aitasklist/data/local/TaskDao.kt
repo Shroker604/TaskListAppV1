@@ -56,4 +56,10 @@ interface TaskDao {
 
     @Query("DELETE FROM tasks WHERE isDeleted = 1 AND scheduledDate > 0 AND scheduledDate < :minTimestamp")
     suspend fun deleteSoftDeletedOlderThan(minTimestamp: Long)
+
+    @Query("SELECT * FROM tasks WHERE isDeleted = 0 AND isCompleted = 0 AND scheduledDate >= :startTime AND scheduledDate <= :endTime ORDER BY scheduledDate ASC")
+    suspend fun getTasksInRange(startTime: Long, endTime: Long): List<Task>
+
+    @Query("SELECT * FROM tasks WHERE isDeleted = 0 AND isCompleted = 0 AND (scheduledDate = 0 OR scheduledDate IS NULL)")
+    suspend fun getUnscheduledTasks(): List<Task>
 }

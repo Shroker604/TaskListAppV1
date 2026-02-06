@@ -528,4 +528,30 @@ fun TaskListScreen(
             }
         }
     }
+
+    // Hourly Summary Sheet Integration
+    var showHourlySheet by remember { mutableStateOf(false) }
+
+    // Check Intent for Notification Trigger
+    LaunchedEffect(Unit) {
+        val activity = context as? android.app.Activity
+        val intent = activity?.intent
+        if (intent?.getBooleanExtra("SHOW_HOURLY_SUMMARY", false) == true) {
+            showHourlySheet = true
+            // Clear extra so it doesn't reopen on rotate
+            intent.removeExtra("SHOW_HOURLY_SUMMARY")
+        }
+    }
+
+    if (showHourlySheet) {
+        val briefing = viewModel.getHourlyBriefing(System.currentTimeMillis())
+        HourlySummarySheet(
+            overdueTasks = briefing.overdueTasks,
+            nextHourTasks = briefing.nextHourTasks,
+            restOfDayTasks = briefing.restOfDayTasks,
+            unscheduledTasks = briefing.unscheduledTasks,
+            onDismiss = { showHourlySheet = false },
+            onTaskClick = { /* Optional: Scrolls to task? */ }
+        )
+    }
 }

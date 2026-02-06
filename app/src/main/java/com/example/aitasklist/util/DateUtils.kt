@@ -22,4 +22,16 @@ object DateUtils {
         calendar.set(Calendar.MILLISECOND, 999)
         return calendar.timeInMillis
     }
+
+    fun formatTime(millis: Long): String {
+        if (millis == 0L) return ""
+        val calendar = Calendar.getInstance()
+        calendar.timeInMillis = millis
+        val hour = calendar.get(Calendar.HOUR)
+        val minute = calendar.get(Calendar.MINUTE)
+        val amPm = if (calendar.get(Calendar.AM_PM) == Calendar.AM) "AM" else "PM"
+        val hourStr = if (hour == 0) "12" else hour.toString()
+        val minuteStr = if (minute < 10) "0$minute" else minute.toString()
+        return "$hourStr:$minuteStr $amPm"
+    }
 }
