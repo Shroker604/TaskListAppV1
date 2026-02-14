@@ -8,6 +8,9 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
 
     <application
         android:name=".TaskApplication"
@@ -21,6 +24,7 @@
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:launchMode="singleTask"
             android:label="@string/app_name"
             android:theme="@style/Theme.AITaskList">
             <intent-filter>
@@ -44,10 +48,25 @@
         <receiver
             android:name=".scheduler.ReminderReceiver"
             android:exported="true" />
+            
+        <receiver
+            android:name=".scheduler.HourlySummaryReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="LAUNCH_OVERLAY" />
+            </intent-filter>
+        </receiver>
 
         <service
             android:name=".TaskWidgetService"
             android:permission="android.permission.BIND_REMOTEVIEWS" />
+
+        <service
+            android:name=".scheduler.HourlySummaryOverlayService"
+            android:exported="true"
+            android:foregroundServiceType="specialUse">
+            <property android:name="android.app.property.FOREGROUND_SERVICE_TYPE" android:value="specialUse" />
+        </service>
     </application>
 
 </manifest>

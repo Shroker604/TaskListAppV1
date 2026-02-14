@@ -15,10 +15,20 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 
 class MainActivity : ComponentActivity() {
+
+    private lateinit var viewModel: com.example.aitasklist.TaskViewModel
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        
+        viewModel = androidx.lifecycle.ViewModelProvider(this)[com.example.aitasklist.TaskViewModel::class.java]
+        
+        // Handle Overlay Actions - Basic check for LAUNCH_OVERLAY (service start) logic
+        // But for permission rationale, we need the ViewModel.
+        // We can create the ViewModel here or lazily inside setContent?
+        // Let's rely on setContent to create VM, then check intent.
+        
         setContent {
-            val viewModel: com.example.aitasklist.TaskViewModel = androidx.lifecycle.viewmodel.compose.viewModel()
             val isDarkTheme by viewModel.isDarkTheme.collectAsState()
             
             MaterialTheme(
@@ -36,5 +46,43 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+    
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent) 
+        
+        android.widget.Toast.makeText(this, "New Intent Action: ${intent.action}", android.widget.Toast.LENGTH_LONG).show()
+        
+        if (intent.action == "LAUNCH_OVERLAY") {
+              handleOverlayIntents() 
+        } else if (intent.action == "REQUEST_OVERLAY_PERMISSION") {
+             if (::viewModel.isInitialized) {
+                 viewModel.setShowOverlayPermissionRationale(true)
+             }
+        }
+    }
+
+    private fun handleOverlayIntents(): Boolean {
+        if (intent?.action == "LAUNCH_OVERLAY") {
+             val serviceIntent = android.content.Intent(this, com.example.aitasklist.scheduler.HourlySummaryOverlayService::class.java)
+             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                 startForegroundService(serviceIntent)
+             } else {
+                 startService(serviceIntent)
+             }
+             finish()
+             return true
+        }
+        
+        if (intent?.action == "REQUEST_OVERLAY_PERMISSION") {
+            // Trigger the dialog logic in UI
+            if (::viewModel.isInitialized) {
+                viewModel.setShowOverlayPermissionRationale(true)
+            }
+            return false 
+        }
+        
+        return false
     }
 }

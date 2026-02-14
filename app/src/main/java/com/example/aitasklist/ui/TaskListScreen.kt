@@ -237,7 +237,16 @@ fun TaskListScreen(
             },
             onOpenRestoreDialog = { showRestoreDialog = true },
             isDailyPlanner = isDailyPlanner,
-            onToggleDailyPlanner = { viewModel.setDailyPlanner(!isDailyPlanner) }
+            onToggleDailyPlanner = { viewModel.setDailyPlanner(!isDailyPlanner) },
+            onEnableHourlySummary = { viewModel.setShowOverlayPermissionRationale(true) },
+            onTestSummary = {
+                 val intent = Intent(context, com.example.aitasklist.scheduler.HourlySummaryOverlayService::class.java)
+                 if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                     context.startForegroundService(intent)
+                 } else {
+                     context.startService(intent)
+                 }
+            }
         )
         
         // ... (Dialogs: Calendar, Edit)
@@ -446,7 +455,12 @@ fun TaskListScreen(
                             if (taskStartOfDay.timeInMillis < today.timeInMillis) {
                                 "Overdue"
                             } else if (taskStartOfDay.timeInMillis == today.timeInMillis) {
-                                "Today"
+                                // Check if time-overdue (Today + Late)
+                                if (task.reminderTime != null && task.reminderTime < System.currentTimeMillis()) {
+                                    "Overdue"
+                                } else {
+                                    "Today"
+                                }
                             } else if (taskStartOfDay.timeInMillis == tomorrow.timeInMillis) {
                                 "Tomorrow"
                             } else if (taskCal.timeInMillis <= endOfCurrentWeek.timeInMillis) {
@@ -532,15 +546,41 @@ fun TaskListScreen(
     // Hourly Summary Sheet Integration
     var showHourlySheet by remember { mutableStateOf(false) }
 
-    // Check Intent for Notification Trigger
+    // Permission Rationale Dialog
+    val showPermissionRationale by viewModel.showOverlayPermissionRationale.collectAsState()
+    
+    if (showPermissionRationale) {
+        AlertDialog(
+            onDismissRequest = { viewModel.setShowOverlayPermissionRationale(false) },
+            title = { Text("Permission Required") },
+            text = { 
+                Text("To display the Hourly Summary over other apps, AG Task List needs the 'Display over other apps' permission.") 
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.setShowOverlayPermissionRationale(false)
+                        val settingsIntent = android.content.Intent(
+                             android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                             android.net.Uri.parse("package:${context.packageName}")
+                        )
+                        context.startActivity(settingsIntent)
+                    }
+                ) {
+                    Text("Go to Settings")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.setShowOverlayPermissionRationale(false) }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    // Check Intent for Notification Trigger - Handled by MainActivity logic now triggering VM state
     LaunchedEffect(Unit) {
-        val activity = context as? android.app.Activity
-        val intent = activity?.intent
-        if (intent?.getBooleanExtra("SHOW_HOURLY_SUMMARY", false) == true) {
-            showHourlySheet = true
-            // Clear extra so it doesn't reopen on rotate
-            intent.removeExtra("SHOW_HOURLY_SUMMARY")
-        }
+        // ... (Cleanup old logic if needed)
     }
 
     if (showHourlySheet) {

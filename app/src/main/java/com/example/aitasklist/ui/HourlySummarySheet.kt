@@ -40,7 +40,7 @@ fun HourlySummarySheet(
     restOfDayTasks: List<Task>,
     unscheduledTasks: List<Task>,
     onDismiss: () -> Unit,
-    onTaskClick: (Task) -> Unit // Optional: Navigate to detail?
+    onTaskClick: (Task) -> Unit 
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
@@ -49,73 +49,104 @@ fun HourlySummarySheet(
         sheetState = sheetState,
         containerColor = MaterialTheme.colorScheme.surface,
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp)
+        HourlySummaryContent(
+            overdueTasks = overdueTasks,
+            nextHourTasks = nextHourTasks,
+            restOfDayTasks = restOfDayTasks,
+            unscheduledTasks = unscheduledTasks,
+            onTaskClick = onTaskClick
+        )
+    }
+}
+
+@Composable
+fun HourlySummaryContent(
+    overdueTasks: List<Task>,
+    nextHourTasks: List<Task>,
+    restOfDayTasks: List<Task>,
+    unscheduledTasks: List<Task>,
+    onTaskClick: (Task) -> Unit = {}
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+    ) {
+        // Handle (Bar) for visual affordance if not in Sheet? 
+        // ModalBottomSheet adds handle automatically.
+        // For Overlay, we might want one. Adding a small spacer/handle logic if needed.
+        // Keeping it simple for now.
+        
+        Text(
+            text = "Hourly Briefing",
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(bottom = 16.dp, top = 8.dp)
+        )
+
+        LazyColumn(
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+            modifier = Modifier.padding(bottom = 32.dp)
         ) {
-            Text(
-                text = "Hourly Briefing",
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(bottom = 16.dp)
-            )
-
-            LazyColumn(
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-                modifier = Modifier.padding(bottom = 32.dp)
-            ) {
-                // 1. Overdue (Critical - Red)
-                if (overdueTasks.isNotEmpty()) {
-                    item {
-                        SectionHeader("Overdue", MaterialTheme.colorScheme.error)
-                    }
-                    items(overdueTasks) { task ->
-                        // Reuse Card style but maybe with error color tint? Or just standard.
-                        // Let's use standard card but context is Red header.
-                        NextHourTaskCard(task) // Reusing the "Prominent" card style
-                    }
+            // 1. Overdue (Critical - Yellow/Red)
+            if (overdueTasks.isNotEmpty()) {
+                item {
+                    SectionHeader("Overdue", MaterialTheme.colorScheme.error)
                 }
-
-                // 2. Next Hour (Critical)
-                if (nextHourTasks.isNotEmpty()) {
-                    item {
-                        SectionHeader("Next Hour", MaterialTheme.colorScheme.primary)
-                    }
-                    items(nextHourTasks) { task ->
-                        NextHourTaskCard(task)
-                    }
-                } else if (overdueTasks.isEmpty()) { 
-                     // Only show "Clear" if NO overdue and NO next hour
-                     item {
-                        SectionHeader("Next Hour", MaterialTheme.colorScheme.onSurfaceVariant)
-                        Text(
-                             text = "No urgent tasks. You're clear!",
-                             style = MaterialTheme.typography.bodyMedium,
-                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                             modifier = Modifier.padding(start = 8.dp)
-                        )
-                    }
+                
+                val now = System.currentTimeMillis()
+                val startOfToday = DateUtils.getStartOfDay(now)
+                
+                items(overdueTasks) { task ->
+                    val isDayOverdue = task.scheduledDate < startOfToday
+                    val containerColor = if (isDayOverdue) MaterialTheme.colorScheme.error else Color(0xFFFFEB3B)
+                    val contentColor = if (isDayOverdue) MaterialTheme.colorScheme.onError else Color.Black
+                    
+                    NextHourTaskCard(
+                        task = task,
+                        containerColor = containerColor,
+                        contentColor = contentColor
+                    ) 
                 }
+            }
 
-                // 3. Rest of Day
-                if (restOfDayTasks.isNotEmpty()) {
-                    item {
-                        SectionHeader("Rest of the Day", MaterialTheme.colorScheme.onSurface)
-                    }
-                    items(restOfDayTasks) { task ->
-                        StandardTaskRow(task)
-                    }
+            // 2. Next Hour (Critical)
+            if (nextHourTasks.isNotEmpty()) {
+                item {
+                    SectionHeader("Next Hour", MaterialTheme.colorScheme.primary)
                 }
+                items(nextHourTasks) { task ->
+                    NextHourTaskCard(task)
+                }
+            } else if (overdueTasks.isEmpty()) { 
+                 item {
+                    SectionHeader("Next Hour", MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(
+                         text = "No urgent tasks. You're clear!",
+                         style = MaterialTheme.typography.bodyMedium,
+                         color = MaterialTheme.colorScheme.onSurfaceVariant,
+                         modifier = Modifier.padding(start = 8.dp)
+                    )
+                }
+            }
 
-                // 4. Unscheduled
-                if (unscheduledTasks.isNotEmpty()) {
-                    item {
-                        SectionHeader("Unscheduled / Anytime", MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f))
-                    }
-                    items(unscheduledTasks) { task ->
-                        UnscheduledTaskRow(task)
-                    }
+            // 3. Rest of Day
+            if (restOfDayTasks.isNotEmpty()) {
+                item {
+                    SectionHeader("Rest of the Day", MaterialTheme.colorScheme.onSurface)
+                }
+                items(restOfDayTasks) { task ->
+                    StandardTaskRow(task)
+                }
+            }
+
+            // 4. Unscheduled
+            if (unscheduledTasks.isNotEmpty()) {
+                item {
+                    SectionHeader("Unscheduled / Anytime", MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f))
+                }
+                items(unscheduledTasks) { task ->
+                    UnscheduledTaskRow(task)
                 }
             }
         }
@@ -134,24 +165,28 @@ fun SectionHeader(title: String, color: Color) {
 }
 
 @Composable
-fun NextHourTaskCard(task: Task) {
+fun NextHourTaskCard(
+    task: Task,
+    containerColor: Color = MaterialTheme.colorScheme.primaryContainer,
+    contentColor: Color = MaterialTheme.colorScheme.onPrimaryContainer
+) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.primaryContainer
+            containerColor = containerColor
         )
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(
                 text = DateUtils.formatTime(task.scheduledDate),
                 style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onPrimaryContainer
+                color = contentColor
             )
             Text(
                 text = task.content,
                 style = MaterialTheme.typography.bodyLarge,
                 fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onPrimaryContainer
+                color = contentColor
             )
         }
     }

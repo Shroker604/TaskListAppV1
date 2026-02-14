@@ -30,7 +30,9 @@ fun TaskHeader(
     onAutoSchedule: () -> Unit,
     onOpenRestoreDialog: () -> Unit,
     isDailyPlanner: Boolean = false,
-    onToggleDailyPlanner: () -> Unit = {}
+    onToggleDailyPlanner: () -> Unit = {},
+    onEnableHourlySummary: () -> Unit = {},
+    onTestSummary: () -> Unit = {}
 ) {
     Row(
         modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
@@ -138,7 +140,7 @@ fun TaskHeader(
                             }
                         )
                         DropdownMenuItem(
-                            text = { Text("Default Calendar") },
+                            text = { Text("Sync Calendar") },
                             onClick = {
                                 onOpenCalendarDialog()
                                 showMenu = false
@@ -146,12 +148,12 @@ fun TaskHeader(
                             leadingIcon = {
                                 Icon(
                                     Icons.Default.Edit,
-                                    contentDescription = "Default Calendar"
+                                    contentDescription = "Sync Calendar"
                                 )
                             }
                         )
                         DropdownMenuItem(
-                            text = { Text("Sync Settings") },
+                            text = { Text("Default Calendars") },
                             onClick = {
                                 onOpenFilterDialog()
                                 showMenu = false
@@ -159,7 +161,7 @@ fun TaskHeader(
                             leadingIcon = {
                                 Icon(
                                     Icons.Default.Settings,
-                                    contentDescription = "Sync Settings"
+                                    contentDescription = "Default Calendars"
                                 )
                             }
                         )
@@ -197,6 +199,31 @@ fun TaskHeader(
                             },
                             trailingIcon = {
                                 Icon(Icons.Default.ArrowForward, contentDescription = null)
+                            }
+                        )
+                        Divider()
+                        DropdownMenuItem(
+                            text = { Text("Enable Hourly Summary") },
+                            onClick = {
+                                onEnableHourlySummary()
+                                showMenu = false
+                            },
+                            leadingIcon = {
+                                Icon(Icons.Default.Layers, contentDescription = "Enable Overlay")
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Test Summary (Internal)") },
+                            onClick = {
+                                // We will reuse this callback or add a new one. 
+                                // Let's simplify and reuse onEnableHourlySummary for now OR add a new one.
+                                // Wait, the user wants to TRIGGER it, not enable permission.
+                                // We need a new callback.
+                                onTestSummary()
+                                showMenu = false
+                            },
+                            leadingIcon = {
+                                Icon(Icons.Default.PlayArrow, contentDescription = "Test Overlay")
                             }
                         )
                     } else if (currentMenuScreen == "View") {

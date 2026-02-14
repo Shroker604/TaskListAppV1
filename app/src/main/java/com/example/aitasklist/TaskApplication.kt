@@ -15,14 +15,10 @@ class TaskApplication : Application() {
         database = com.example.aitasklist.di.ServiceLocator.getInstance(this)
         
         // Schedule Hourly Summary
-        val workRequest = androidx.work.PeriodicWorkRequestBuilder<com.example.aitasklist.scheduler.HourlySummaryWorker>(
-            1, java.util.concurrent.TimeUnit.HOURS
-        ).build()
-
-        androidx.work.WorkManager.getInstance(this).enqueueUniquePeriodicWork(
-            "HourlySummaryWork",
-            androidx.work.ExistingPeriodicWorkPolicy.KEEP,
-            workRequest
+        // Helper to schedule the first work if not exists
+        com.example.aitasklist.scheduler.HourlySummaryWorker.scheduleNextWork(
+            this, 
+            androidx.work.ExistingWorkPolicy.KEEP // Only schedule if getting started (not if already running)
         )
     }
 }

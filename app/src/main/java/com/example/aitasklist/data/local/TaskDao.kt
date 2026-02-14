@@ -60,6 +60,9 @@ interface TaskDao {
     @Query("SELECT * FROM tasks WHERE isDeleted = 0 AND isCompleted = 0 AND scheduledDate >= :startTime AND scheduledDate <= :endTime ORDER BY scheduledDate ASC")
     suspend fun getTasksInRange(startTime: Long, endTime: Long): List<Task>
 
+    @Query("SELECT * FROM tasks WHERE isDeleted = 0 AND isCompleted = 0 AND scheduledDate > 0 AND scheduledDate < :now ORDER BY scheduledDate ASC")
+    suspend fun getOverdueTasks(now: Long): List<Task>
+
     @Query("SELECT * FROM tasks WHERE isDeleted = 0 AND isCompleted = 0 AND (scheduledDate = 0 OR scheduledDate IS NULL)")
     suspend fun getUnscheduledTasks(): List<Task>
 }

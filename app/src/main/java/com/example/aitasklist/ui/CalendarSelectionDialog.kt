@@ -22,7 +22,7 @@ fun CalendarSelectionDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.select_default_calendar)) },
+        title = { Text("Select Sync Calendar") },
         text = {
             LazyColumn {
                 items(calendars) { calendar ->

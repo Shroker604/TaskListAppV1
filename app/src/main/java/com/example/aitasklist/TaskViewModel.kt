@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.first
@@ -52,6 +53,14 @@ class TaskViewModel(application: Application) : AndroidViewModel(application) {
     private val _defaultCalendarId = MutableStateFlow<Long?>(null)
     private val _sortOption = MutableStateFlow(SortOption.DATE_REMINDER)
     private val _sortAscending = MutableStateFlow(false)
+
+    // Permission Rationale State
+    private val _showOverlayPermissionRationale = MutableStateFlow(false)
+    val showOverlayPermissionRationale: StateFlow<Boolean> = _showOverlayPermissionRationale.asStateFlow()
+
+    fun setShowOverlayPermissionRationale(show: Boolean) {
+        _showOverlayPermissionRationale.value = show
+    }
 
     init {
         loadCalendars()

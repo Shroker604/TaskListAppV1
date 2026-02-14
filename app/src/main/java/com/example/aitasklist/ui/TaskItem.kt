@@ -59,11 +59,16 @@ fun TaskItem(
     var pressOffset by remember { mutableStateOf(androidx.compose.ui.unit.DpOffset.Zero) }
     val density = androidx.compose.ui.platform.LocalDensity.current
 
-    val isOverdue = !task.isCompleted && task.scheduledDate != 0L && (
+    val isPastOverdue = !task.isCompleted && task.scheduledDate != 0L && (
             taskCalendar.get(Calendar.YEAR) < currentCalendar.get(Calendar.YEAR) ||
                     (taskCalendar.get(Calendar.YEAR) == currentCalendar.get(Calendar.YEAR) &&
                             taskCalendar.get(Calendar.DAY_OF_YEAR) < currentCalendar.get(Calendar.DAY_OF_YEAR))
             )
+
+    val isTodayOverdue = !task.isCompleted && !isPastOverdue && task.scheduledDate != 0L && 
+            taskCalendar.get(Calendar.YEAR) == currentCalendar.get(Calendar.YEAR) &&
+            taskCalendar.get(Calendar.DAY_OF_YEAR) == currentCalendar.get(Calendar.DAY_OF_YEAR) &&
+            task.reminderTime != null && task.reminderTime < System.currentTimeMillis()
 
     var showDatePicker by remember { mutableStateOf(false) }
 
@@ -114,6 +119,17 @@ fun TaskItem(
     val dateFormat = SimpleDateFormat("MMM dd, yyyy", Locale.getDefault())
     val timeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
 
+    val cardColor = if (isPastOverdue) {
+        androidx.compose.ui.graphics.Color(0xFFF08080) // Red/Salmon
+    } else if (isTodayOverdue) {
+        androidx.compose.ui.graphics.Color(0xFFFFEB3B) // Yellow
+    } else {
+        MaterialTheme.colorScheme.surfaceVariant
+    }
+    
+    // Ensure content color is black for the colored backgrounds (Red/Orange) for readability
+    val contentColor = if (isPastOverdue || isTodayOverdue) androidx.compose.ui.graphics.Color.Black else androidx.compose.ui.graphics.Color.Unspecified
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -132,7 +148,8 @@ fun TaskItem(
             },
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         colors = CardDefaults.cardColors(
-            containerColor = if (isOverdue) androidx.compose.ui.graphics.Color(0xFFF08080) else MaterialTheme.colorScheme.surfaceVariant
+            containerColor = cardColor,
+            contentColor = contentColor
         )
     ) {
         Box {
@@ -245,7 +262,7 @@ fun TaskItem(
                             Text(
                                 text = dateFormat.format(Date(task.scheduledDate)),
                                 style = MaterialTheme.typography.bodySmall,
-                                color = if (isOverdue) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.secondary
+                                color = if (isPastOverdue || isTodayOverdue) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.secondary
                             )
                         }
                         

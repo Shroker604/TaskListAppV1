@@ -24,7 +24,7 @@ fun CalendarFilterDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Sync Settings") },
+        title = { Text("Default Calendars") },
         text = {
             Column {
                 Text(
