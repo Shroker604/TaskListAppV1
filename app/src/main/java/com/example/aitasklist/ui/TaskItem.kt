@@ -128,7 +128,10 @@ fun TaskItem(
     }
     
     // Ensure content color is black for the colored backgrounds (Red/Orange) for readability
-    val contentColor = if (isPastOverdue || isTodayOverdue) androidx.compose.ui.graphics.Color.Black else androidx.compose.ui.graphics.Color.Unspecified
+    val isOverdue = isPastOverdue || isTodayOverdue
+    val contentColor = if (isOverdue) androidx.compose.ui.graphics.Color.Black else androidx.compose.ui.graphics.Color.Unspecified
+    val metadataColor = if (isOverdue) androidx.compose.ui.graphics.Color.Black else MaterialTheme.colorScheme.secondary
+    val primaryIconColor = if (isOverdue) androidx.compose.ui.graphics.Color.Black else MaterialTheme.colorScheme.primary
 
     Card(
         modifier = Modifier
@@ -262,7 +265,7 @@ fun TaskItem(
                             Text(
                                 text = dateFormat.format(Date(task.scheduledDate)),
                                 style = MaterialTheme.typography.bodySmall,
-                                color = if (isPastOverdue || isTodayOverdue) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.secondary
+                                color = metadataColor
                             )
                         }
                         
@@ -272,13 +275,13 @@ fun TaskItem(
                                 imageVector = Icons.Default.Notifications,
                                 contentDescription = "Reminder set",
                                 modifier = Modifier.size(12.dp),
-                                tint = MaterialTheme.colorScheme.secondary
+                                tint = metadataColor
                             )
                             Spacer(modifier = Modifier.width(2.dp))
                             Text(
                                 text = timeFormat.format(Date(task.reminderTime)),
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.secondary
+                                color = metadataColor
                             )
                         }
                         
@@ -288,7 +291,7 @@ fun TaskItem(
                                 imageVector = Icons.Default.Refresh,
                                 contentDescription = "Recurring",
                                 modifier = Modifier.size(12.dp),
-                                tint = MaterialTheme.colorScheme.secondary
+                                tint = metadataColor
                             )
                         }
                     }
@@ -297,7 +300,7 @@ fun TaskItem(
                     Icon(
                         imageVector = Icons.Default.DateRange,
                         contentDescription = stringResource(R.string.change_date_desc),
-                        tint = if (!showDragHandle) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                        tint = if (!showDragHandle) primaryIconColor else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
                     )
                 }
 

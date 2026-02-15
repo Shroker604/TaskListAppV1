@@ -99,8 +99,8 @@ fun HourlySummaryContent(
                 
                 items(overdueTasks) { task ->
                     val isDayOverdue = task.scheduledDate < startOfToday
-                    val containerColor = if (isDayOverdue) MaterialTheme.colorScheme.error else Color(0xFFFFEB3B)
-                    val contentColor = if (isDayOverdue) MaterialTheme.colorScheme.onError else Color.Black
+                    val containerColor = if (isDayOverdue) Color(0xFFF08080) else Color(0xFFFFEB3B)
+                    val contentColor = Color.Black
                     
                     NextHourTaskCard(
                         task = task,
