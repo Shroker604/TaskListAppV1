@@ -107,7 +107,7 @@ fun TaskListScreen(
         TaskItem(
             task = task,
             onCheckedChange = { viewModel.toggleTaskCompletion(task.id) },
-            onDateChange = { newDate -> viewModel.updateTaskDate(task.id, newDate) },
+            onUpdateSchedule = { newDate, newTime -> viewModel.updateTaskSchedule(task.id, newDate, newTime) },
             onAddToCalendar = {
                 val action = {
                     viewModel.addToCalendar(task) { accountName ->

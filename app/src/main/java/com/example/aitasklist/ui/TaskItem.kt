@@ -37,12 +37,12 @@ import java.util.Locale
 fun TaskItem(
     task: Task,
     onCheckedChange: (Boolean) -> Unit,
-    onDateChange: (Long) -> Unit,
     onAddToCalendar: () -> Unit,
     onOpenCalendar: () -> Unit,
     onSetReminder: () -> Unit,
     onPriorityChange: (com.example.aitasklist.model.Priority) -> Unit,
     onEditTask: () -> Unit,
+    onUpdateSchedule: (Long, Long?) -> Unit,
     showDragHandle: Boolean = false,
     dragModifier: Modifier = Modifier,
     onEnterReorderMode: () -> Unit = {}
@@ -73,47 +73,15 @@ fun TaskItem(
     var showDatePicker by remember { mutableStateOf(false) }
 
     if (showDatePicker) {
-        val datePickerState = rememberDatePickerState(
-            initialSelectedDateMillis = remember(task.scheduledDate) {
-                val cal = Calendar.getInstance()
-                if (task.scheduledDate != 0L) {
-                    cal.timeInMillis = task.scheduledDate
-                } else {
-                    cal.timeInMillis = System.currentTimeMillis()
-                }
-                val utcCal = Calendar.getInstance(java.util.TimeZone.getTimeZone("UTC"))
-                utcCal.clear()
-                utcCal.set(cal.get(Calendar.YEAR), cal.get(Calendar.MONTH), cal.get(Calendar.DAY_OF_MONTH))
-                utcCal.timeInMillis
-            }
-        )
-
-        DatePickerDialog(
-            onDismissRequest = { showDatePicker = false },
-            confirmButton = {
-                TextButton(onClick = {
-                    showDatePicker = false
-                    datePickerState.selectedDateMillis?.let { utcMillis ->
-                        val utcCal = Calendar.getInstance(java.util.TimeZone.getTimeZone("UTC"))
-                        utcCal.timeInMillis = utcMillis
-                        
-                        val localCal = Calendar.getInstance()
-                        if (task.scheduledDate != 0L) {
-                            localCal.timeInMillis = task.scheduledDate
-                        } else {
-                            localCal.timeInMillis = System.currentTimeMillis()
-                        }
-                        localCal.set(utcCal.get(Calendar.YEAR), utcCal.get(Calendar.MONTH), utcCal.get(Calendar.DAY_OF_MONTH))
-                        onDateChange(localCal.timeInMillis)
-                    }
-                }) { Text("OK") }
+        DateTimePickerDialog(
+            initialDateMillis = task.scheduledDate,
+            initialTimeMillis = task.reminderTime,
+            onConfirm = { dateMillis, timeMillis ->
+                showDatePicker = false
+                onUpdateSchedule(dateMillis, timeMillis)
             },
-            dismissButton = {
-                TextButton(onClick = { showDatePicker = false }) { Text("Cancel") }
-            }
-        ) {
-            DatePicker(state = datePickerState)
-        }
+            onDismiss = { showDatePicker = false }
+        )
     }
 
     val dateFormat = SimpleDateFormat("MMM dd, yyyy", Locale.getDefault())

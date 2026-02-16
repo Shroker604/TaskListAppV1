@@ -103,12 +103,13 @@ class CalendarRepository(private val context: Context) {
         return null
     }
 
-    fun updateCalendarEvent(eventId: Long, title: String, description: String, startTime: Long, endTime: Long) {
+    fun updateCalendarEvent(eventId: Long, title: String, description: String, startTime: Long, endTime: Long, isAllDay: Boolean = false) {
         val values = ContentValues().apply {
             put(CalendarContract.Events.DTSTART, startTime)
             put(CalendarContract.Events.DTEND, endTime)
             put(CalendarContract.Events.TITLE, title)
             put(CalendarContract.Events.DESCRIPTION, description)
+            put(CalendarContract.Events.ALL_DAY, if (isAllDay) 1 else 0)
         }
 
         val updateUri = android.content.ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, eventId)
