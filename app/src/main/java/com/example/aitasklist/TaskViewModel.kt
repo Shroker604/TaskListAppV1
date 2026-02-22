@@ -43,6 +43,7 @@ class TaskViewModel(application: Application) : AndroidViewModel(application) {
     private val preferencesRepository = ServiceLocator.userPreferencesRepository!!
     private val syncManager = ServiceLocator.syncManager!!
     private val briefingManager = ServiceLocator.briefingManager!!
+    private val taskScheduleManager = ServiceLocator.taskScheduleManager!!
     private val sortStrategyRegistry = ServiceLocator.sortStrategyRegistry
     
     private val _isLoading = MutableStateFlow(false)
@@ -221,71 +222,16 @@ class TaskViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             val task = uiState.value.tasks.find { it.id == taskId }
             task?.let {
-                // If Time is set: Date = Time (Exact). Reminder = Time.
-                // If Time is NULL: Date = Midnight (All Day). Reminder = NULL.
-                val finalScheduledDate = newTime ?: newDate
-                val finalReminderTime = newTime
-                
-                val updatedTask = it.copy(
-                    scheduledDate = finalScheduledDate,
-                    reminderTime = finalReminderTime
-                )
-                
-                taskDao.updateTask(updatedTask)
-                
-                // Handle Reminder Scheduling
-                if (finalReminderTime != null) {
-                    reminderManager.scheduleReminder(updatedTask.id, updatedTask.content, finalReminderTime, updatedTask.priority.name)
-                } else {
-                    reminderManager.cancelReminder(updatedTask.id)
-                }
-
-                // Handle Calendar Sync
-                if (updatedTask.calendarEventId != null) {
-                    val isAllDay = finalReminderTime == null
-                    val endTime = if (isAllDay) {
-                        // All Day: +24h
-                        finalScheduledDate + (24 * 60 * 60 * 1000)
-                    } else {
-                        // Specific Time: +1h default duration
-                        finalScheduledDate + 3600000
-                    }
-                    
-                    calendarRepository.updateCalendarEvent(
-                        eventId = updatedTask.calendarEventId,
-                        title = updatedTask.content,
-                        description = "Created from AI Task List",
-                        startTime = finalScheduledDate,
-                        endTime = endTime,
-                        isAllDay = isAllDay
-                    )
-                }
+                taskScheduleManager.updateTaskSchedule(it, newDate, newTime)
             }
         }
     }
 
     fun updateTaskDate(taskId: String, newDate: Long) {
-        // Legacy or Date-Only fallback - delegates to new method assuming "preserve time" or "reset time"?
-        // Better to deprecate or map to new logic. For now, let's just use the new logic to be safe.
-        // Assuming this was used for "Date Only" before, we might want to preserve existing time if present?
-        // But the new UI replaces this. Let's keep it for compatibility but maybe update it to use new flow if needed.
-        // Actually, let's just make it redirect for now or leave as is if not used by new UI.
-        // But for safety, let's Update it to use updateTaskSchedule assuming NO time change if possible, or just reset.
-        // Let's leave it compatible for now.
         viewModelScope.launch {
             val task = uiState.value.tasks.find { it.id == taskId }
             task?.let {
-                taskDao.updateTask(it.copy(scheduledDate = newDate))
-                
-                if (it.calendarEventId != null) {
-                    calendarRepository.updateCalendarEvent(
-                        eventId = it.calendarEventId,
-                        title = it.content,
-                        description = "Created from AI Task List",
-                        startTime = newDate,
-                        endTime = newDate + 3600000
-                    )
-                }
+                taskScheduleManager.updateTaskDate(it, newDate)
             }
         }
     }
@@ -303,8 +249,7 @@ class TaskViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             val task = uiState.value.tasks.find { it.id == taskId }
             task?.let {
-                taskDao.updateTask(it.copy(reminderTime = time))
-                reminderManager.scheduleReminder(it.id, it.content, time, it.priority.name)
+                taskScheduleManager.updateTaskSchedule(it, it.scheduledDate, time)
             }
         }
     }
@@ -386,22 +331,9 @@ class TaskViewModel(application: Application) : AndroidViewModel(application) {
 
     fun addToCalendar(task: Task, onSuccess: (String) -> Unit) {
         viewModelScope.launch {
-            val startTime = task.scheduledDate
-            val endTime = startTime + 3600000
-            val calendarId = _defaultCalendarId.value
-            
-            val result = calendarRepository.addToCalendar(
-                title = task.content,
-                description = "Created from AI Task List",
-                startTime = startTime,
-                endTime = endTime,
-                calendarId = calendarId
-            )
-            
-            if (result != null) {
-                val (eventId, accountName) = result
-                taskDao.updateTask(task.copy(calendarEventId = eventId))
-                onSuccess(accountName)
+            val result = taskScheduleManager.addToCalendar(task)
+            result?.let { (_, accountName) ->
+                 onSuccess(accountName)
             }
         }
     }

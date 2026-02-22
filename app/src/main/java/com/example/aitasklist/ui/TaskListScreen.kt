@@ -27,6 +27,7 @@ import com.example.aitasklist.TaskViewModel
 import com.example.aitasklist.model.Task
 import com.example.aitasklist.ui.components.TaskHeader
 import com.example.aitasklist.ui.components.TaskInputSection
+import com.example.aitasklist.ui.components.*
 import java.util.Collections
 
 @Composable
@@ -279,35 +280,13 @@ fun TaskListScreen(
         }
         
         if (showEditDialog && editingTask != null) {
-            var editedContent by remember { mutableStateOf(editingTask!!.content) }
-            
-            AlertDialog(
-                onDismissRequest = { showEditDialog = false },
-                title = { Text("Edit Task") },
-                text = {
-                    OutlinedTextField(
-                        value = editedContent,
-                        onValueChange = { editedContent = it },
-                        modifier = Modifier.fillMaxWidth()
-                    )
+            EditTaskDialog(
+                task = editingTask!!,
+                onSave = { newContent ->
+                    viewModel.updateTaskContent(editingTask!!.id, newContent)
+                    showEditDialog = false
                 },
-                confirmButton = {
-                    TextButton(
-                        onClick = {
-                            if (editedContent.isNotBlank()) {
-                                viewModel.updateTaskContent(editingTask!!.id, editedContent)
-                            }
-                            showEditDialog = false
-                        }
-                    ) {
-                        Text("Save")
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = { showEditDialog = false }) {
-                        Text("Cancel")
-                    }
-                }
+                onDismiss = { showEditDialog = false }
             )
         }
 
@@ -389,114 +368,10 @@ fun TaskListScreen(
                      }
                  }
             } else if (isDailyPlanner) {
-                // REFERRAL: Daily Planner View Logic
-                // Group tasks by Date: 
-                // Overdue, Today, Tomorrow, Current Week (Rest of week), Next Week, Upcoming, No Date
-                LazyColumn(
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.weight(1f)
-                ) {
-                    val today = java.util.Calendar.getInstance()
-                    
-                    // Normalize today to start of day for comparison
-                    today.set(java.util.Calendar.HOUR_OF_DAY, 0)
-                    today.set(java.util.Calendar.MINUTE, 0)
-                    today.set(java.util.Calendar.SECOND, 0)
-                    today.set(java.util.Calendar.MILLISECOND, 0)
-
-                    val tomorrow = java.util.Calendar.getInstance().apply { 
-                        timeInMillis = today.timeInMillis
-                        add(java.util.Calendar.DAY_OF_YEAR, 1) 
-                    }
-                    
-                    // End of Current Week (Saturday)
-                    val endOfCurrentWeek = java.util.Calendar.getInstance().apply {
-                        timeInMillis = today.timeInMillis
-                        set(java.util.Calendar.DAY_OF_WEEK, java.util.Calendar.SATURDAY)
-                        // If today is Sunday (1), Saturday is next week technically in US/DEFAULT logic depending on Locale?
-                        // Let's assume generic "rest of this week" logic. 
-                        // If today is Saturday, endOfCurrentWeek might be today.
-                        // Ensure we are looking forward.
-                        if (get(java.util.Calendar.DAY_OF_YEAR) < today.get(java.util.Calendar.DAY_OF_YEAR)) {
-                             add(java.util.Calendar.WEEK_OF_YEAR, 1)
-                        }
-                        set(java.util.Calendar.HOUR_OF_DAY, 23)
-                        set(java.util.Calendar.MINUTE, 59)
-                    }
-
-                    // End of Next Week
-                    val startOfNextWeek = java.util.Calendar.getInstance().apply {
-                        timeInMillis = endOfCurrentWeek.timeInMillis
-                        add(java.util.Calendar.DAY_OF_YEAR, 1) // Sunday
-                        set(java.util.Calendar.HOUR_OF_DAY, 0)
-                        set(java.util.Calendar.MINUTE, 0)
-                    }
-                    
-                    val endOfNextWeek = java.util.Calendar.getInstance().apply {
-                        timeInMillis = startOfNextWeek.timeInMillis
-                        add(java.util.Calendar.DAY_OF_YEAR, 6) // Next Saturday
-                        set(java.util.Calendar.HOUR_OF_DAY, 23)
-                        set(java.util.Calendar.MINUTE, 59)
-                    }
-                    
-                    val groupedTasks = uiState.tasks.groupBy { task ->
-                        if (task.scheduledDate == 0L) "No Date"
-                        else {
-                            val taskCal = java.util.Calendar.getInstance().apply { timeInMillis = task.scheduledDate }
-                            // Normalize task time to start of day for accurate day-comparison
-                            val taskStartOfDay = java.util.Calendar.getInstance().apply {
-                                timeInMillis = task.scheduledDate
-                                set(java.util.Calendar.HOUR_OF_DAY, 0)
-                                set(java.util.Calendar.MINUTE, 0)
-                                set(java.util.Calendar.SECOND, 0)
-                                set(java.util.Calendar.MILLISECOND, 0)
-                            }
-
-                            if (taskStartOfDay.timeInMillis < today.timeInMillis) {
-                                "Overdue"
-                            } else if (taskStartOfDay.timeInMillis == today.timeInMillis) {
-                                // Check if time-overdue (Today + Late)
-                                if (task.reminderTime != null && task.reminderTime < System.currentTimeMillis()) {
-                                    "Overdue"
-                                } else {
-                                    "Today"
-                                }
-                            } else if (taskStartOfDay.timeInMillis == tomorrow.timeInMillis) {
-                                "Tomorrow"
-                            } else if (taskCal.timeInMillis <= endOfCurrentWeek.timeInMillis) {
-                                "Current Week"
-                            } else if (taskCal.timeInMillis <= endOfNextWeek.timeInMillis) {
-                                "Next Week"
-                            } else {
-                                "Upcoming"
-                            }
-                        }
-                    }
-
-                    // Order: Overdue, Today, Tomorrow, Current Week, Next Week, Upcoming, No Date
-                    val sectionOrder = listOf("Overdue", "Today", "Tomorrow", "Current Week", "Next Week", "Upcoming", "No Date")
-                    
-                    sectionOrder.forEach { section ->
-                        groupedTasks[section]?.let { tasks ->
-                             if (tasks.isNotEmpty()) {
-                                 item {
-                                     Column(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
-                                         Text(
-                                             text = section,
-                                             style = MaterialTheme.typography.titleMedium,
-                                             color = if(section == "Overdue") MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
-                                             modifier = Modifier.padding(bottom = 4.dp)
-                                         )
-                                         Divider(color = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f))
-                                     }
-                                 }
-                                 items(tasks, key = { it.id }) { task ->
-                                     bindTaskItem(task, false, null)
-                                 }
-                             }
-                        }
-                    }
-                }
+                DailyPlannerList(
+                    tasks = uiState.tasks,
+                    bindTaskItem = bindTaskItem
+                )
             } else {
                 // Default View: Scheduled vs Tasks
                 LazyColumn(

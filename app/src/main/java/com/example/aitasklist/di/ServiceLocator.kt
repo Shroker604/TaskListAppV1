@@ -8,6 +8,7 @@ import com.example.aitasklist.data.local.AppDatabase
 import com.example.aitasklist.scheduler.ReminderManager
 import com.example.aitasklist.scheduler.AutoScheduler
 import com.example.aitasklist.scheduler.CalendarGapManager
+import com.example.aitasklist.scheduler.TaskScheduleManager
 import com.example.aitasklist.domain.SortStrategyRegistry
 import com.example.aitasklist.domain.SyncManager
 import com.example.aitasklist.domain.BriefingManager
@@ -42,6 +43,10 @@ object ServiceLocator {
     var briefingManager: BriefingManager? = null
         private set
         
+    @Volatile
+    var taskScheduleManager: com.example.aitasklist.scheduler.TaskScheduleManager? = null
+        private set
+        
     val sortStrategyRegistry: SortStrategyRegistry by lazy {
         SortStrategyRegistry()
     }
@@ -66,6 +71,7 @@ object ServiceLocator {
         val autoScheduler = AutoScheduler()
         val calendarGapManager = CalendarGapManager()
         
+        
         syncManager = SyncManager(
             calendarRepository!!,
             database!!.taskDao(),
@@ -75,5 +81,11 @@ object ServiceLocator {
         )
         
         briefingManager = BriefingManager()
+        
+        taskScheduleManager = TaskScheduleManager(
+            database!!.taskDao(),
+            calendarRepository!!,
+            reminderManager!!
+        )
     }
 }

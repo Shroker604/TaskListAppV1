@@ -1,11 +1,14 @@
 package com.example.aitasklist.ui
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.DialogProperties
 import java.util.Calendar
 import java.util.TimeZone
 
@@ -17,7 +20,9 @@ fun DateTimePickerDialog(
     onConfirm: (Long, Long?) -> Unit, // returns (DateMillis, TimeMillis?)
     onDismiss: () -> Unit
 ) {
-    var showTimePicker by remember { mutableStateOf(false) }
+    // State for Tabs
+    var selectedTabIndex by remember { mutableIntStateOf(0) } // 0 = Date, 1 = Time
+    val tabs = listOf("Date", "Time")
     
     // Date State
     val datePickerState = rememberDatePickerState(
@@ -49,25 +54,13 @@ fun DateTimePickerDialog(
             cal.timeInMillis = initialTimeMillis!!
             cal.get(Calendar.MINUTE)
         } else 0,
-        is24Hour = false // Could be user preference
+        is24Hour = false
     )
-
-    if (showTimePicker) {
-        AlertDialog(
-            onDismissRequest = { showTimePicker = false },
-            confirmButton = {
-                TextButton(onClick = { showTimePicker = false }) {
-                    Text("OK")
-                }
-            },
-            text = {
-                TimeInput(state = timeState)
-            }
-        )
-    }
 
     DatePickerDialog(
         onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false),
+        modifier = Modifier.fillMaxWidth(0.95f),
         confirmButton = {
             TextButton(
                 onClick = {
@@ -79,14 +72,12 @@ fun DateTimePickerDialog(
                         localCal.clear()
                         localCal.set(utcCal.get(Calendar.YEAR), utcCal.get(Calendar.MONTH), utcCal.get(Calendar.DAY_OF_MONTH))
                         
-                        // If hasTime, set usage of Time
                         val finalTimeMillis: Long?
                         if (hasTime) {
                             localCal.set(Calendar.HOUR_OF_DAY, timeState.hour)
                             localCal.set(Calendar.MINUTE, timeState.minute)
                             finalTimeMillis = localCal.timeInMillis
                         } else {
-                            // All Day -> Midnight
                             finalTimeMillis = null
                         }
                         
@@ -103,39 +94,69 @@ fun DateTimePickerDialog(
             }
         }
     ) {
-        Column {
-            DatePicker(state = datePickerState)
-            
-            Divider()
-            
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 24.dp, vertical = 16.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text("Set Time", style = MaterialTheme.typography.bodyLarge)
-                Switch(
-                    checked = hasTime,
-                    onCheckedChange = { hasTime = it }
-                )
+        Column(
+            modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState())
+        ) {
+            // Tab Row
+            TabRow(selectedTabIndex = selectedTabIndex) {
+                tabs.forEachIndexed { index, title ->
+                    Tab(
+                        selected = selectedTabIndex == index,
+                        onClick = { selectedTabIndex = index },
+                        text = { Text(title) }
+                    )
+                }
             }
             
-            if (hasTime) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 24.dp, vertical = 8.dp),
-                    horizontalArrangement = Arrangement.End,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    TextButton(onClick = { showTimePicker = true }) {
-                        val cal = Calendar.getInstance()
-                        cal.set(Calendar.HOUR_OF_DAY, timeState.hour)
-                        cal.set(Calendar.MINUTE, timeState.minute)
-                        val timeFormat = java.text.SimpleDateFormat.getTimeInstance(java.text.DateFormat.SHORT)
-                        Text(text = timeFormat.format(cal.time), style = MaterialTheme.typography.titleMedium)
+            Spacer(modifier = Modifier.height(16.dp))
+            
+            // Content
+            when (selectedTabIndex) {
+                0 -> {
+                    // Date Tab
+                    DatePicker(
+                        state = datePickerState,
+                        title = null, // Hide built-in title to save space
+                        headline = null,
+                        showModeToggle = false
+                    )
+                }
+                1 -> {
+                    // Time Tab
+                    Column(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 16.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("Include Time", style = MaterialTheme.typography.bodyLarge)
+                            Switch(
+                                checked = hasTime,
+                                onCheckedChange = { hasTime = it }
+                            )
+                        }
+                        
+                        if (hasTime) {
+                            TimePicker(state = timeState)
+                        } else {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(200.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    "All Day Event",
+                                    style = MaterialTheme.typography.headlineSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
                     }
                 }
             }
